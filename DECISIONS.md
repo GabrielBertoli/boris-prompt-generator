@@ -185,6 +185,60 @@ tour champ par champ et replafonne (40 tours, 24 000 caractères chacun).
 C'est aussi ce qui rend l'assertion nécessaire — un champ non déclaré y
 disparaît en SILENCE, et le profil ne garderait rien.
 
+## 16. La casse : un panneau, pas une section de bas de page
+
+La bibliothèque au bas de la page obligeait à faire défiler pour retrouver
+un prompt, alors que c'est l'objet qu'on manipule le plus. Elle devient un
+panneau permanent au-delà de 1100 px, tiroir coulissant en dessous.
+
+Le tiroir se referme par **transformation**, jamais par démontage. Deux
+raisons, la seconde compte autant que la première : ce qu'il contient
+reste dans l'ordre de tabulation et lisible par un lecteur d'écran, et il
+reste atteignable par une sonde — un tiroir démonté serait invérifiable.
+
+## 17. Le penseur : un GIF pour la photo, du CSS pour le reste
+
+Gabriel voulait un GIF animé de sa photo pendant les appels. Animer un
+visage demande un modèle de génération vidéo (Veo, Kling) : API payante,
+aucune clé, et la question du portrait d'une personne réelle. Ce qui est
+livré est un vrai GIF, fabriqué localement, qui porte un mouvement
+**photographique** — souffle, léger redressement, encre qui respire — pas
+une animation faciale. C'est dit tel quel.
+
+Recette : `magick` produit 24 images (échelle 170 → +3 %, rotation ±0,5°,
+duotone `#100c0a → #f6e3d4`), `ffmpeg` assemble en palette deux passes
+(`palettegen stats_mode=diff` puis `paletteuse dither=none`), `gifsicle
+-O3 --lossy=90` optimise. 160 px, 140 Ko.
+
+La trame de similigravure et l'anneau de repérage sont restés en **CSS**.
+Dans le GIF, la trame dérivante détruisait la compression inter-images :
+1,3 Mo contre 140 Ko. En CSS elle est nette à toute densité d'écran, et
+`prefers-reduced-motion` peut l'arrêter — ce qu'un GIF ne sait pas faire.
+
+## 18. Deux instruments de vérification, et ce que chacun ne prouve pas
+
+Le harnais d'assertions (`npm run verify`) et le pilotage réel
+(Playwright) ne mesurent pas la même chose. Aucun ne remplace l'autre.
+
+**Ce que le harnais ne peut pas faire.** Sa sonde mobile force
+`documentElement.style.width`, mais les media queries s'évaluent sur le
+**vrai viewport** — 485 px sous ce Chrome headless. Aucun palier
+responsive n'est donc exercé. Mesuré : `--window-size=320,720` laisse
+`window.innerWidth` à 500, ce Chrome l'ignore pour de bon. C'est pourquoi
+le débordement de l'avatar à 320 px lui était invisible.
+
+**Et pourquoi on ne l'a pas « durcie ».** Ajouter « bord droit hors
+cadre » à la sonde la faisait signaler des éléments que les paliers
+corrigent : elle ne peut pas distinguer un vrai défaut d'un faux, puisque
+les paliers ne s'appliquent pas chez elle. Retiré. Une sonde qui ne sait
+pas trancher ne doit pas trancher — mieux vaut une limite écrite qu'une
+assertion qui ment dans les deux sens.
+
+La vérification responsive passe donc par un pilote qui règle vraiment le
+viewport. Playwright n'est pas une dépendance du dépôt : on l'installe à
+côté, `channel: "chrome"` évite tout téléchargement. Le mode d'emploi
+complet est dans `.claude/skills/verify/SKILL.md`.
+
 ---
 
 ## Reste à la main de Gabriel

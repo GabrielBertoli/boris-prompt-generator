@@ -52,9 +52,16 @@ Tous les parcours passent en preview, assertions au vert bundle et mail compris 
 - L'état fait foi dans **`ETAT.md`** (où ça en est, ce qui reste, la reprise)
   et **`DECISIONS.md`** (chaque arbitrage et son motif). Une reprise se fait
   en les lisant — pas en refaisant le chemin.
-- Vérificateur : `npm run verify` (avec `BASE_URL` pour viser un
-  déploiement). **111 assertions**, au vert sur la production le 2026-08-01.
-  Rien ne se déclare sans l'avoir rejoué.
+- **Deux instruments de vérification**, et le skill `/verify` du dépôt
+  (`.claude/skills/verify/SKILL.md`) dit lequel prouve quoi :
+  1. `npm run verify` — **122 assertions**, au vert sur la production le
+     2026-08-01. Rien ne se déclare sans l'avoir rejoué. **Mais il
+     n'exerce aucun palier responsive** : il force la largeur du document
+     et les media queries s'évaluent sur le vrai viewport (`DECISIONS.md`
+     § 18).
+  2. Le pilotage réel (Playwright, `channel: "chrome"`, installé hors du
+     dépôt) — le seul qui prouve un parcours au clic et les paliers
+     mobiles. C'est lui qui a trouvé le débordement de 15 px à 320 px.
 - Un seul chantier reste ouvert, et il n'appartient pas à l'agent : l'envoi
   du mail de réinitialisation, suspendu à une clé Resend de la main de
   Gabriel — voir `ETAT.md`, § « Ce qui reste ouvert ».

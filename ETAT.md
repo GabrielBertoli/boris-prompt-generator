@@ -1,8 +1,39 @@
 # État du run
 
 **EN PRODUCTION** — https://boris-prompt-generator.vercel.app
-Déployée sur ordre de Gabriel le 2026-08-01, **111 assertions au vert sur
-l'alias stable** après coup. Zéro échec.
+Déployée sur ordre de Gabriel le 2026-08-01, **122 assertions au vert sur
+l'alias stable**, zéro échec — et, ce qui compte davantage, **le parcours
+entier conduit au clic dans un vrai navigateur** : porte, génération,
+correction en v2, autre appareil, 320 px, suppression. Voir « L'audit au
+pilotage » plus bas.
+
+## La casse, à gauche
+
+La bibliothèque a quitté le bas de page pour devenir un panneau : **la
+casse**, le meuble où le typographe range ses caractères. Chaque prompt y
+tient son cassetin — clic sur le titre et il revient sur le marbre avec son
+fil, « ⋯ » déplie ses huit gestes, export/import en pied. Panneau permanent
+au-delà de 1100 px, tiroir coulissant en dessous.
+
+Le tiroir n'est **jamais démonté** du document : il se referme par
+transformation. Ce qu'on y range reste donc atteignable au clavier — et
+mesurable par une sonde.
+
+## Le penseur
+
+Un vrai GIF fabriqué depuis la photo de Gabriel (`public/penseur.gif` —
+24 images, 160 px, 140 Ko), affiché **à chaque appel à Claude et seulement
+alors** : analyse, génération, juge, correction. Le libellé suit ce qui se
+passe (« il lit l'idée », « il compose », « le juge relit ») et les
+secondes défilent.
+
+Le GIF ne porte que le mouvement photographique. La trame de similigravure
+et l'anneau de repérage sont en CSS : trois fois plus léger, net sur écran
+à forte densité, et immobile pour qui a réglé son système sur « moins de
+mouvement ».
+
+Refabriquer le GIF : `ffmpeg` + ImageMagick + `gifsicle`, recette dans
+`DECISIONS.md` § 17.
 
 **Panne corrigée le 2026-08-01 : une génération pouvait tourner plus de
 trois minutes, muette.** Rien ne bornait l'appel à `api.anthropic.com` — ni
@@ -209,6 +240,28 @@ Deux sorties possibles ce jour-là :
    voulue par le programme.
 2. **Domaine chez Resend** (durable). Gabriel nomme un domaine qu'il possède,
    je provisionne via le Marketplace et `MAIL_FROM` devient une vraie adresse.
+
+## L'audit au pilotage — 2026-08-01
+
+Playwright, Chrome réel, la production. Tout est passé : mauvais code
+refusé (« Code refusé. »), génération (réparation 5360 → 4038 → 3697), fil
+de correction en v2, **prompt affiché une seule fois**, réouverture sur un
+**contexte neuf sans localStorage** — le fil revient, il vient donc bien du
+profil —, correction vide refusée, gestes du cassetin, suppression puis
+rechargement.
+
+**Un défaut trouvé, corrigé, revérifié : l'avatar débordait de 15 px à
+320 px.** La barre supérieure portait un élément de trop depuis l'ajout du
+bouton de la casse, et c'est le dernier qui payait (`scrollWidth` 335 pour
+320). Dégraissage par paliers : la marque disparaît à 460 px, le mot
+« Casse » à 400 px. Revérifié à de vrais viewports, 4 largeurs × 3 états,
+zéro débordement, en local puis en production.
+
+**Le harnais ne pouvait pas le voir**, et c'est le vrai enseignement : voir
+`DECISIONS.md` § 18. En deux mots — sa sonde force la largeur du document,
+les media queries s'évaluent sur le vrai viewport, aucun palier n'est donc
+exercé. Le skill `.claude/skills/verify/SKILL.md` dit quel instrument
+prouve quoi.
 
 ## Reprise — dans l'ordre
 
