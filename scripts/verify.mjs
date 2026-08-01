@@ -368,7 +368,24 @@ if (!BASE) {
   }
 }
 
-/* ---------- 3. mobile : aucun débordement horizontal ---------- */
+/* ---------- 3. mobile : aucun débordement horizontal ----------
+
+   CE QUE CETTE SONDE NE PEUT PAS FAIRE, et qu'il faut savoir avant de
+   lui faire confiance : elle force `documentElement.style.width`, mais
+   les media queries, elles, s'évaluent sur le VRAI viewport — 485 px
+   ici. Aucun palier responsive n'est donc exercé. Mesuré le 2026-08-01 :
+   `--window-size=320,720` laisse `window.innerWidth` à 500, ce Chrome
+   l'ignore pour de bon.
+
+   Conséquence : un défaut qui ne se produit qu'à un palier (une rangée
+   trop chargée à 320 px, par exemple) lui est invisible, et un vrai
+   viewport de 320 px lui ferait au contraire crier au loup sur des
+   éléments que le palier corrige. Ce qu'elle mesure reste utile — une
+   largeur intrinsèque non maîtrisée sort ici — mais la vérification
+   responsive demande un pilote qui règle vraiment le viewport
+   (Playwright, `newContext({ viewport })`). C'est comme cela que le
+   débordement de l'avatar à 320 px a été trouvé, et c'est là qu'il faut
+   le revérifier. */
 
 section("Mobile");
 

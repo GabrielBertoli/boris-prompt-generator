@@ -808,7 +808,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
             aria-expanded={casseOpen}
           >
             <span className="casse-toggle-bars" aria-hidden="true" />
-            Casse
+            <span className="casse-toggle-mot">Casse</span>
             <span className="tag">{library.length}</span>
           </button>
 

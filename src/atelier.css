@@ -1423,3 +1423,53 @@ pre {
   letter-spacing: 0.02em;
   color: var(--signal);
 }
+
+/* ================================================================
+   BARRE SUPÉRIEURE À L'ÉTROIT
+
+   Mesuré au pilotage, vrai viewport de 320 px : l'avatar sortait de
+   15 px. Aucune largeur n'était fautive — la rangée portait simplement
+   un élément de trop depuis l'ajout du bouton de la casse, et c'est le
+   dernier qui payait. On dégraisse par paliers plutôt que d'autoriser
+   un retour à la ligne, qui ferait sauter la hauteur de la barre.
+   ================================================================ */
+
+.topbar-inner > * {
+  min-width: 0;
+}
+
+.topbar-inner .brand-mark,
+.casse-toggle,
+.avatar {
+  flex: none;
+}
+
+@media (max-width: 460px) {
+  /* La marque se retire la première : le nom la répète juste à côté. */
+  .topbar-inner .brand-mark {
+    display: none;
+  }
+}
+
+@media (max-width: 400px) {
+  /* Puis le mot « Casse » : les trois filets et le compte suffisent. */
+  .casse-toggle-mot {
+    display: none;
+  }
+
+  .casse-toggle {
+    padding: 9px 12px;
+    gap: 6px;
+  }
+
+  .topbar-inner {
+    gap: 6px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .topbar-inner .btn {
+    padding: 9px 12px;
+    font-size: 13px;
+  }
+}
