@@ -92,7 +92,15 @@ if (!BASE) {
   const anon = await callRaw("/api/session");
   assert("GET /api/session répond 200", anon.status === 200, `reçu ${anon.status}`);
   assert("anonyme = non authentifié", anon.body?.authenticated === false);
-  assert("trois prénoms proposés", anon.body?.users?.length === 3, list(anon.body?.users));
+  /* La liste attendue est nommée, pas comptée : ajouter quelqu'un et
+     oublier de le semer ne doit pas passer inaperçu. */
+  const EXPECTED = ["Gabriel", "Karl", "Raphaëlle", "Gabriela"];
+  const served = (anon.body?.users || []).map((u) => u.name);
+  assert(
+    "les prénoms attendus sont proposés",
+    EXPECTED.every((n) => served.includes(n)) && served.length === EXPECTED.length,
+    served.join(", ")
+  );
   assert(
     "aucune clé servie au portail",
     !anon.body?.sharedKey && !JSON.stringify(anon.body).includes("sk-ant-")

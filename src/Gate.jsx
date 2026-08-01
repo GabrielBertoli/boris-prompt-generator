@@ -7,7 +7,10 @@ import { api } from "./api.js";
    qui traîne : un lien par mail, valable trente minutes.
    ================================================================ */
 
+/* Repli si /api/session ne répond pas : la porte reste dessinée.
+   La liste qui fait foi est celle du serveur (api/_lib/http.js). */
 const FALLBACK = [
+  { id: "gabriel", name: "Gabriel", initial: "G" },
   { id: "karl", name: "Karl", initial: "K" },
   { id: "raphaelle", name: "Raphaëlle", initial: "R" },
   { id: "gabriela", name: "Gabriela", initial: "G" },

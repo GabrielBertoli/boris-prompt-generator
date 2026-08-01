@@ -453,10 +453,25 @@ select:disabled {
 
 /* ---------- portail ---------- */
 
+/* Roster de quatre : `auto-fit` tombait sur trois colonnes autour de
+   700 px et laissait le quatrième prénom orphelin sur sa ligne. Paliers
+   explicites — 1, puis 2, puis 4 — jamais d'orphelin. */
 .gate-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
+  grid-template-columns: 1fr;
   gap: 14px;
+}
+
+@media (min-width: 460px) {
+  .gate-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1080px) {
+  .gate-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 .gate-card {

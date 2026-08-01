@@ -10,7 +10,7 @@ sur tout ce qui ne dépend pas des deux fournisseurs.
 
 | Parcours | État | Preuve |
 |---|---|---|
-| Prénom choisi | ✅ | trois prénoms servis par `/api/session` |
+| Prénom choisi | ✅ | quatre prénoms servis par `/api/session` |
 | Mauvais code refusé | ✅ | 401, aucun cookie posé |
 | Bon code retenu | ✅ | 200, cookie `HttpOnly` + `Secure` |
 | Code changé | ✅ | aller-retour `2000G` → provisoire → `2000G` |
@@ -25,10 +25,16 @@ sur tout ce qui ne dépend pas des deux fournisseurs.
 | Mobile | ✅ | zéro débordement mesuré à 320, 360, 390 et 430 px |
 
 Preview courante :
-`https://boris-prompt-generator-l2f1mya9x-coe-startup.vercel.app`
+`https://boris-prompt-generator-3alg21uey-coe-startup.vercel.app`
 
-Codes en place : `1994K`, `2000R`, `2000G`. Aucun mail enregistré — c'est à
-chacun de poser le sien depuis Réglages.
+Comptes en place : Gabriel `1966G`, Karl `1994K`, Raphaëlle `2000R`,
+Gabriela `2000G` — les quatre vérifiés, bon code accepté et mauvais refusé.
+Aucun mail enregistré : c'est à chacun de poser le sien depuis Réglages.
+
+Ajouter quelqu'un = trois endroits, plus la graine :
+`api/_lib/http.js` (USERS, qui fait foi), `src/Gate.jsx` (repli si l'accès
+ne répond pas), `scripts/verify.mjs` (liste attendue, nommée et non comptée),
+puis `node scripts/seed.mjs <id>=<code>`.
 
 Protection SSO désactivée sur le projet — sinon Karl, Raphaëlle et Gabriela
 se heurteraient au mur Vercel avant même la porte d'entrée. **Elle se
@@ -129,3 +135,13 @@ zéro débordement de 320 à 430 px. Les durcissements CSS (`min-width: 0` sur
 les enfants de grille, `min()` dans les `minmax`) sont conservés — corrects
 par construction — mais ils ne réparaient rien. La leçon est dans le
 vérificateur : le contrôle mobile y est désormais permanent.
+
+**Quatre prénoms orphelinaient le quatrième.** `auto-fit` sur la grille de
+la porte tombait à trois colonnes autour de 700 px, laissant Gabriela seule
+sur sa ligne. Paliers explicites — 1, 2, puis 4 colonnes. Mesuré après coup :
+deux colonnes de 298,5 px, quatre cartes en 2×2, opacité 1 partout.
+
+**Une capture headless ne prouve pas une mise en page.** Le même écran
+montrait une seule carte sur quatre — artefact de peinture, pas de bug : la
+sonde DOM a confirmé les quatre cartes visibles et bien placées. Mesurer,
+pas regarder.

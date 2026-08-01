@@ -5,9 +5,12 @@ import { readSession } from "./crypto.js";
 
 export const COOKIE = "bpg_session";
 
-/* Les trois prénoms de la porte d'entrée. Ce ne sont pas des secrets :
-   seuls les codes le sont, et ils vivent hachés côté serveur. */
+/* Les prénoms de la porte d'entrée. Ce ne sont pas des secrets :
+   seuls les codes le sont, et ils vivent hachés côté serveur.
+   `gabriel` et `gabriela` partagent l'initiale G — les identifiants, eux,
+   restent distincts, et c'est le prénom entier qui s'affiche. */
 export const USERS = [
+  { id: "gabriel", name: "Gabriel", initial: "G" },
   { id: "karl", name: "Karl", initial: "K" },
   { id: "raphaelle", name: "Raphaëlle", initial: "R" },
   { id: "gabriela", name: "Gabriela", initial: "G" },
