@@ -153,6 +153,10 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   const [activeId, setActiveId] = useState(null);
   const [demand, setDemand] = useState("");
 
+  /* La casse : ouverte d'office sur grand écran (elle y est un panneau),
+     tiroir replié sur petit écran. */
+  const [casseOpen, setCasseOpen] = useState(false);
+
   const composerRef = useRef(null);
   const resultRef = useRef(null);
   const fileRef = useRef(null);
@@ -623,6 +627,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     setSaveState("saved");
     setPhase("done");
     setRunCost({ writer: 0, judge: 0 });
+    setCasseOpen(false); // le tiroir se referme derrière soi
     resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -707,6 +712,13 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
 
   const downloadOne = (item) => downloadText(`${slugify(item.title)}.md`, toMarkdown(item));
 
+  const copyEntry = async (item) => {
+    if (await copy(item.prompt)) {
+      setCopiedId(item.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    }
+  };
+
   const exportAll = () => {
     if (!library.length) return;
     const day = new Date().toISOString().slice(0, 10);
@@ -787,7 +799,19 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     <div className="atelier pb-24">
       {/* ================= barre supérieure ================= */}
       <header className="topbar">
-        <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-5 py-3 sm:px-8">
+        <div className="topbar-inner">
+          {/* Tiroir de la casse — visible seulement quand elle est repliée. */}
+          <button
+            className="btn btn-quiet casse-toggle"
+            type="button"
+            onClick={() => setCasseOpen((v) => !v)}
+            aria-expanded={casseOpen}
+          >
+            <span className="casse-toggle-bars" aria-hidden="true" />
+            Casse
+            <span className="tag">{library.length}</span>
+          </button>
+
           <span className="brand-mark">B</span>
           <div className="min-w-0 flex-1">
             <div className="eyebrow">Atelier Boris</div>
@@ -823,7 +847,57 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl px-5 sm:px-8">
+      {/* Marques de repérage : le coin d'une feuille sur le marbre. */}
+      <div className="marks" aria-hidden="true">
+        <i /><i /><i /><i />
+      </div>
+
+      <div className={casseOpen ? "shell shell-open" : "shell"}>
+        <Casse
+          items={shown}
+          total={library.length}
+          search={search}
+          setSearch={setSearch}
+          activeId={activeId}
+          open={casseOpen}
+          onClose={() => setCasseOpen(false)}
+          loading={libLoading}
+          remote={libRemote}
+          note={libNote}
+          error={libError}
+          expandedId={openId}
+          setExpandedId={setOpenId}
+          renamingId={renamingId}
+          renameDraft={renameDraft}
+          setRenameDraft={setRenameDraft}
+          cancelRename={cancelRename}
+          onStartRename={startRename}
+          onCancelRename={() => setRenamingId(null)}
+          onCommitRename={commitRename}
+          onResume={resumeThread}
+          onDuplicate={duplicate}
+          onDownload={downloadOne}
+          onPrint={setPrinting}
+          onEdit={openEditor}
+          onCopy={copyEntry}
+          copiedId={copiedId}
+          pendingDelete={pendingDelete}
+          setPendingDelete={setPendingDelete}
+          onRemove={removeEntry}
+          onExport={exportAll}
+          onImport={() => fileRef.current?.click()}
+          fileRef={fileRef}
+          onFile={importAll}
+        />
+
+        <button
+          className="casse-veil"
+          type="button"
+          aria-label="Replier la casse"
+          onClick={() => setCasseOpen(false)}
+        />
+
+      <main className="atelier-main">
         {/* ================= manchette ================= */}
         <section className="rise pt-12 pb-10 sm:pt-16">
           <div className="eyebrow mb-4">
@@ -1184,184 +1258,6 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           </section>
         )}
 
-        {/* ================= 03 · bibliothèque ================= */}
-        <section className="card mt-6 p-6 sm:p-7">
-          <div className="section-head">
-            <span className="section-num">03</span>
-            <span className="section-title">Ta bibliothèque</span>
-            <span className="section-line" />
-            <span className="tag">{library.length}</span>
-          </div>
-
-          {library.length > 0 && (
-            <input
-              type="text"
-              className="mb-4"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Chercher un titre, une idée, un mot du prompt…"
-            />
-          )}
-
-          {/* Copie de secours. La bibliothèque ne vit que dans la clé-valeur :
-              un magasin vidé, et tout part. Un fichier chez soi répare ça. */}
-          <div className="mb-5 flex flex-wrap items-center gap-2">
-            <button
-              className="btn btn-quiet"
-              type="button"
-              onClick={exportAll}
-              disabled={library.length === 0}
-            >
-              Exporter tout (.json)
-            </button>
-            <button className="btn btn-quiet" type="button" onClick={() => fileRef.current?.click()}>
-              Importer un fichier
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = ""; // réimporter le même fichier reste possible
-                importAll(file);
-              }}
-            />
-          </div>
-
-          {libNote && <p className="note note-info mb-4">{libNote}</p>}
-          {libError && <p className="note note-error mb-4">{libError}</p>}
-
-          {libLoading ? (
-            <p className="mono pulse text-sm" style={{ color: "var(--muted-2)" }}>
-              chargement…
-            </p>
-          ) : library.length === 0 ? (
-            <p className="lede text-[14.5px]">
-              Rien encore. Génère un prompt, puis « Sauvegarder » — il te suivra d'un appareil à
-              l'autre, et toi seul y as accès.
-            </p>
-          ) : shown.length === 0 ? (
-            <p className="lede text-[14.5px]">Aucun prompt ne correspond à « {search} ».</p>
-          ) : (
-            <div className="lib-grid">
-              {shown.map((item) => (
-                <article key={item.id} className="lib-card">
-                  <div className="flex items-start justify-between gap-3">
-                    {renamingId === item.id ? (
-                      <input
-                        type="text"
-                        className="lib-rename"
-                        value={renameDraft}
-                        autoFocus
-                        onChange={(e) => setRenameDraft(e.target.value)}
-                        /* Entrée et Échap sortent tous deux par le flou :
-                           une seule voie de validation, donc pas de double
-                           enregistrement — et Échap annule vraiment. */
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") e.currentTarget.blur();
-                          if (e.key === "Escape") {
-                            cancelRename.current = true;
-                            e.currentTarget.blur();
-                          }
-                        }}
-                        onBlur={() => {
-                          if (cancelRename.current) {
-                            cancelRename.current = false;
-                            setRenamingId(null);
-                            return;
-                          }
-                          commitRename();
-                        }}
-                      />
-                    ) : (
-                      <h3 className="lib-title">{item.title}</h3>
-                    )}
-                    <span className="tag tag-accent">v{item.version}</span>
-                  </div>
-
-                  <p className="lib-excerpt">{item.prompt.slice(0, 190)}…</p>
-
-                  <div className="mono flex flex-wrap items-center gap-2 text-[10.5px]" style={{ color: "var(--muted-2)" }}>
-                    <span className="tag">{item.count} car.</span>
-                    <span>{formatDate(item.updatedAt || item.savedAt)}</span>
-                  </div>
-
-                  <div className="mt-1 flex flex-wrap gap-2">
-                    <button
-                      className="btn btn-quiet"
-                      type="button"
-                      onClick={() => setOpenId(openId === item.id ? null : item.id)}
-                    >
-                      {openId === item.id ? "Replier" : "Lire"}
-                    </button>
-                    <button
-                      className="btn btn-quiet"
-                      type="button"
-                      onClick={async () => {
-                        if (await copy(item.prompt)) {
-                          setCopiedId(item.id);
-                          setTimeout(() => setCopiedId(null), 2000);
-                        }
-                      }}
-                    >
-                      {copiedId === item.id ? "Copié ✓" : "Copier"}
-                    </button>
-                    <button className="btn btn-quiet" type="button" onClick={() => openEditor(item)}>
-                      Modifier
-                    </button>
-                    <button className="btn btn-quiet" type="button" onClick={() => resumeThread(item)}>
-                      Reprendre le fil
-                      {item.chat?.length ? ` (${item.chat.filter((t) => t.role === "moi").length})` : ""}
-                    </button>
-                    <button className="btn btn-quiet" type="button" onClick={() => startRename(item)}>
-                      Renommer
-                    </button>
-                    <button className="btn btn-quiet" type="button" onClick={() => duplicate(item)}>
-                      Dupliquer
-                    </button>
-                    <button className="btn btn-quiet" type="button" onClick={() => downloadOne(item)}>
-                      Télécharger
-                    </button>
-                    <button className="btn btn-quiet" type="button" onClick={() => setPrinting(item)}>
-                      Imprimer
-                    </button>
-                    {item.idea && (
-                      <button className="btn btn-quiet" type="button" onClick={() => reuse(item)}>
-                        Reprendre l'idée
-                      </button>
-                    )}
-                    {pendingDelete === item.id ? (
-                      <>
-                        <button
-                          className="btn btn-quiet btn-danger"
-                          type="button"
-                          onClick={() => removeEntry(item.id)}
-                        >
-                          Confirmer
-                        </button>
-                        <button className="btn btn-quiet" type="button" onClick={() => setPendingDelete(null)}>
-                          Non
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        className="btn btn-quiet btn-danger"
-                        type="button"
-                        onClick={() => setPendingDelete(item.id)}
-                      >
-                        Supprimer
-                      </button>
-                    )}
-                  </div>
-
-                  {openId === item.id && <pre className="prompt-sheet mt-2">{item.prompt}</pre>}
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
 
         <footer className="mono mt-14 text-[11px] leading-relaxed" style={{ color: "var(--muted-2)" }}>
           Le prompt généré part du prompt de référence de la session Odoo agentique. Un prompt ne
@@ -1369,6 +1265,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           audit.
         </footer>
       </main>
+      </div>
 
       {sheet === "reglages" && (
         <SettingsSheet
@@ -1399,8 +1296,285 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
         />
       )}
 
+      {/* Il ne paraît que pendant un appel à Claude — tous les appels. */}
+      {(busy || auditLoading) && (
+        <Penseur
+          phase={phase}
+          judging={auditLoading}
+          elapsed={elapsed}
+          chars={countChars(stream)}
+        />
+      )}
+
       {printing && createPortal(<PrintSheet entry={printing} />, document.body)}
     </div>
+  );
+}
+
+/* ================================================================
+   LE PENSEUR — il paraît dès qu'on fait appel à Claude, et seulement
+   alors : analyse, génération, audit du juge, correction, v2.
+
+   Pas un GIF : une photo fixe et de l'animation en CSS. Le vocabulaire
+   est celui de l'atelier — trame de similigravure qui dérive comme un
+   écran mal calé, encre braise qui monte et redescend, anneau de
+   repérage qui tourne. Quelques kilo-octets, net à toute taille, et
+   immobile pour qui a demandé moins de mouvement.
+   ================================================================ */
+
+function Penseur({ phase, judging, elapsed, chars }) {
+  const dit = judging
+    ? "le juge relit"
+    : phase === "analyzing"
+      ? "il lit l'idée"
+      : "il compose";
+
+  return (
+    <div className="penseur" role="status" aria-live="polite">
+      <div className="penseur-portrait">
+        <img src="/penseur.gif" alt="" width="160" height="160" />
+        <span className="penseur-trame" aria-hidden="true" />
+        <span className="penseur-anneau" aria-hidden="true" />
+      </div>
+      <div className="min-w-0">
+        <div className="eyebrow penseur-dit">{dit}</div>
+        <div className="mono penseur-chiffres">
+          {elapsed} s{chars > 0 ? ` · ${chars} car.` : ""}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   LA CASSE — le meuble du typographe, à gauche.
+
+   Chaque prompt enregistré y occupe son cassetin. Un clic sur le titre
+   le remet sur le marbre (l'atelier) avec son fil ; « ⋯ » ouvre les
+   gestes de ce cassetin-là. Panneau fixe au-delà de 1100 px, tiroir
+   coulissant en dessous — mais TOUJOURS dans le document : un tiroir
+   replié se referme par transformation, il ne se démonte pas.
+   ================================================================ */
+
+function Casse({
+  items,
+  total,
+  search,
+  setSearch,
+  activeId,
+  onClose,
+  loading,
+  remote,
+  note,
+  error,
+  expandedId,
+  setExpandedId,
+  renamingId,
+  renameDraft,
+  setRenameDraft,
+  cancelRename,
+  onStartRename,
+  onCancelRename,
+  onCommitRename,
+  onResume,
+  onDuplicate,
+  onDownload,
+  onPrint,
+  onEdit,
+  onCopy,
+  copiedId,
+  pendingDelete,
+  setPendingDelete,
+  onRemove,
+  onExport,
+  onImport,
+  fileRef,
+  onFile,
+}) {
+  return (
+    <aside className="casse" aria-label="Bibliothèque de prompts">
+      <div className="casse-head">
+        <div>
+          <div className="eyebrow">La casse</div>
+          <div className="casse-count mono">
+            {total} prompt{total > 1 ? "s" : ""}
+            {!remote && <span className="tag tag-ko ml-2">hors ligne</span>}
+          </div>
+        </div>
+        <button className="btn btn-quiet casse-shut" type="button" onClick={onClose}>
+          Replier
+        </button>
+      </div>
+
+      {total > 0 && (
+        <input
+          type="text"
+          className="casse-search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Chercher…"
+        />
+      )}
+
+      {note && <p className="note note-info casse-note">{note}</p>}
+      {error && <p className="note note-error casse-note">{error}</p>}
+
+      <div className="casse-body">
+        {loading ? (
+          <p className="mono pulse casse-empty">chargement…</p>
+        ) : total === 0 ? (
+          <p className="casse-empty">
+            Rien encore. Génère un prompt, puis « Sauvegarder » — il te suivra d'un appareil à
+            l'autre, et toi seul y as accès.
+          </p>
+        ) : items.length === 0 ? (
+          <p className="casse-empty">Aucun prompt ne correspond à « {search} ».</p>
+        ) : (
+          items.map((item) => {
+            const open = expandedId === item.id;
+            return (
+              <article
+                key={item.id}
+                className={`cassetin${activeId === item.id ? " cassetin-active" : ""}`}
+              >
+                <div className="cassetin-row">
+                  {renamingId === item.id ? (
+                    <input
+                      type="text"
+                      className="lib-rename"
+                      value={renameDraft}
+                      autoFocus
+                      onChange={(e) => setRenameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                        if (e.key === "Escape") {
+                          cancelRename.current = true;
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      onBlur={() => {
+                        if (cancelRename.current) {
+                          cancelRename.current = false;
+                          onCancelRename();
+                          return;
+                        }
+                        onCommitRename();
+                      }}
+                    />
+                  ) : (
+                    <button className="casse-open" type="button" onClick={() => onResume(item)}>
+                      <span className="cassetin-title">{item.title}</span>
+                      <span className="cassetin-meta mono">
+                        v{item.version} · {item.count} car.
+                        {item.chat?.length
+                          ? ` · ${item.chat.filter((t) => t.role === "moi").length} correction(s)`
+                          : ""}
+                      </span>
+                    </button>
+                  )}
+
+                  <button
+                    className="casse-more"
+                    type="button"
+                    aria-label="Gestes de ce prompt"
+                    aria-expanded={open}
+                    onClick={() => setExpandedId(open ? null : item.id)}
+                  >
+                    ⋯
+                  </button>
+                </div>
+
+                {open && (
+                  <div className="cassetin-acts">
+                    <button className="btn btn-quiet" type="button" onClick={() => onResume(item)}>
+                      Reprendre le fil
+                    </button>
+                    <button className="btn btn-quiet" type="button" onClick={() => onCopy(item)}>
+                      {copiedId === item.id ? "Copié ✓" : "Copier"}
+                    </button>
+                    <button className="btn btn-quiet" type="button" onClick={() => onEdit(item)}>
+                      Modifier
+                    </button>
+                    <button
+                      className="btn btn-quiet"
+                      type="button"
+                      onClick={() => onStartRename(item)}
+                    >
+                      Renommer
+                    </button>
+                    <button
+                      className="btn btn-quiet"
+                      type="button"
+                      onClick={() => onDuplicate(item)}
+                    >
+                      Dupliquer
+                    </button>
+                    <button
+                      className="btn btn-quiet"
+                      type="button"
+                      onClick={() => onDownload(item)}
+                    >
+                      Télécharger
+                    </button>
+                    <button className="btn btn-quiet" type="button" onClick={() => onPrint(item)}>
+                      Imprimer
+                    </button>
+                    {pendingDelete === item.id ? (
+                      <>
+                        <button
+                          className="btn btn-quiet btn-danger"
+                          type="button"
+                          onClick={() => onRemove(item.id)}
+                        >
+                          Confirmer
+                        </button>
+                        <button
+                          className="btn btn-quiet"
+                          type="button"
+                          onClick={() => setPendingDelete(null)}
+                        >
+                          Non
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="btn btn-quiet btn-danger"
+                        type="button"
+                        onClick={() => setPendingDelete(item.id)}
+                      >
+                        Supprimer
+                      </button>
+                    )}
+                  </div>
+                )}
+              </article>
+            );
+          })
+        )}
+      </div>
+
+      {/* Copie de secours. La bibliothèque ne vit que dans la clé-valeur :
+          un magasin vidé, et tout part. Un fichier chez soi répare ça. */}
+      <div className="casse-foot">
+        <button className="btn btn-quiet" type="button" onClick={onExport} disabled={total === 0}>
+          Exporter
+        </button>
+        <button className="btn btn-quiet" type="button" onClick={onImport}>
+          Importer
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = ""; // réimporter le même fichier reste possible
+            onFile(file);
+          }}
+        />
+      </div>
+    </aside>
   );
 }
 

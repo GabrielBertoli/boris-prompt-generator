@@ -378,24 +378,50 @@ const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
    à 485 px quoi qu'on demande. On force donc la largeur de mise en page
    depuis la page elle-même, puis on cherche un élément plus large que
    son conteneur — la signature d'un `min-width: auto` non maîtrisé. */
-const PROBE_SCRIPT = `<script>setTimeout(() => {
-  const out = [];
-  for (const W of [320, 360, 390, 430]) {
-    document.documentElement.style.width = W + "px";
-    document.documentElement.style.overflowX = "visible";
-    document.body.style.overflowX = "visible";
+const PROBE_SCRIPT = `<script>
+  /* Un élément en position fixe se dimensionne sur le VRAI viewport, jamais
+     sur la largeur qu'on force ici : mesuré contre 320 px il paraîtrait
+     toujours trop large, et il ne déborde pourtant rien — il ne participe
+     pas au flux horizontal du document. On l'écarte de cette passe et on le
+     contrôle à part, contre la largeur réelle de la fenêtre.
+     (Pas d'accent grave dans ce commentaire : il vit dans un gabarit de
+     chaîne, et le moindre backtick le refermerait.) */
+  window.__mesure = (id) => {
+    const out = [];
+    for (const W of [320, 360, 390, 430]) {
+      document.documentElement.style.width = W + "px";
+      document.documentElement.style.overflowX = "visible";
+      document.body.style.overflowX = "visible";
+      void document.body.offsetWidth;
+      let over = 0;
+      document.querySelectorAll("*").forEach((el) => {
+        if (el.id.startsWith("PROBE")) return;
+        if (getComputedStyle(el).position === "fixed") return;
+        if (el.getBoundingClientRect().width > W + 1) over += 1;
+      });
+      out.push(W + ":" + over);
+    }
+    document.documentElement.style.width = "";
+
+    /* Les fixes, contre la fenêtre réelle : eux non plus n'ont pas le droit
+       de dépasser, c'est simplement une autre référence. */
     void document.body.offsetWidth;
-    let over = 0;
+    let fixes = 0;
     document.querySelectorAll("*").forEach((el) => {
-      if (el.id !== "PROBE" && el.getBoundingClientRect().width > W + 1) over += 1;
+      if (getComputedStyle(el).position !== "fixed") return;
+      if (el.getBoundingClientRect().width > window.innerWidth + 1) fixes += 1;
     });
-    out.push(W + ":" + over);
-  }
-  const p = document.createElement("pre");
-  p.id = "PROBE";
-  p.textContent = out.join(" ");
-  document.body.appendChild(p);
-}, 1500);</script>`;
+    out.push("fixes:" + fixes);
+
+    const p = document.createElement("pre");
+    p.id = id;
+    p.textContent = out.join(" ");
+    document.body.appendChild(p);
+  };
+  /* Une surface qui met en scène (ouvrir un tiroir, charger un fil) prend
+     la main : elle mesure quand SON état est en place, pas avant. */
+  setTimeout(() => { if (!window.__manuel) window.__mesure("PROBE"); }, 1500);
+</script>`;
 
 /* DEUX surfaces, pas une.
    Jusqu'ici la sonde répondait « non authentifié » avec zéro prénom : elle
@@ -447,7 +473,7 @@ const SURFACES = [
   },
   {
     label: "atelier",
-    marker: "Dupliquer",
+    marker: "La casse",
     routes: {
       "/api/session": {
         ok: true,
@@ -463,41 +489,52 @@ const SURFACES = [
        `window.print` est neutralisé AVANT tout — ce script classique
        s'exécute avant le module différé de l'application. Sans cela, une
        boîte d'impression suspendrait Chrome, et le vérificateur avec. */
+    /* Cette surface se met en scène avant de se laisser mesurer : le tiroir
+       de la casse ouvert et un cassetin déplié d'abord — c'est là qu'un
+       panneau de 340 px peut déborder un écran de 320 — puis le fil chargé,
+       qui n'existe qu'une fois un prompt remis sur le marbre. */
     action: `<script>
+      window.__manuel = true;
       window.print = () => { window.__printed = (window.__printed || 0) + 1; };
-
-      /* AVANT la mesure de débordement (1500 ms) : on ouvre le fil, sinon
-         il n'est jamais rendu — il n'apparaît qu'avec un prompt chargé — et
-         le contrôle mobile passerait à côté, exactement comme il passait à
-         côté de tout l'atelier avant qu'on serve une session. */
-      setTimeout(() => {
-        const reprise = [...document.querySelectorAll("button")]
-          .find((b) => b.textContent.trim().startsWith("Reprendre le fil"));
-        if (reprise) reprise.click();
-      }, 1100);
+      const boutons = () => [...document.querySelectorAll("button")];
 
       setTimeout(() => {
-        const btn = [...document.querySelectorAll("button")]
-          .find((b) => b.textContent.trim() === "Imprimer");
-        if (btn) btn.click();
+        document.querySelector(".casse-toggle")?.click();
+        document.querySelector(".casse-more")?.click();
+      }, 900);
+
+      setTimeout(() => window.__mesure("PROBE-CASSE"), 1400);
+
+      setTimeout(() => {
+        document.querySelector(".casse-open")?.click();
+
         setTimeout(() => {
-          const sheet = document.querySelector(".print-only");
-          const out = document.createElement("pre");
-          out.id = "PRINT";
-          const fil = document.querySelector(".thread");
-          out.textContent = JSON.stringify({
-            bouton: Boolean(btn),
-            feuille: Boolean(sheet),
-            prompt: Boolean(sheet && sheet.textContent.includes("# QUI TU ES")),
-            titre: Boolean(sheet && sheet.textContent.includes("conciergerie")),
-            appels: window.__printed || 0,
-            fil: Boolean(fil),
-            tours: fil ? fil.querySelectorAll(".turn").length : 0,
-            demande: Boolean(fil && fil.textContent.includes("durcis l'escalade")),
-            saisie: Boolean(fil && fil.querySelector("textarea")),
-          });
-          document.body.appendChild(out);
-        }, 400);
+          window.__mesure("PROBE");
+
+          const btn = boutons().find((b) => b.textContent.trim() === "Imprimer");
+          if (btn) btn.click();
+
+          setTimeout(() => {
+            const sheet = document.querySelector(".print-only");
+            const fil = document.querySelector(".thread");
+            const out = document.createElement("pre");
+            out.id = "PRINT";
+            out.textContent = JSON.stringify({
+              bouton: Boolean(btn),
+              feuille: Boolean(sheet),
+              prompt: Boolean(sheet && sheet.textContent.includes("# QUI TU ES")),
+              titre: Boolean(sheet && sheet.textContent.includes("conciergerie")),
+              appels: window.__printed || 0,
+              fil: Boolean(fil),
+              tours: fil ? fil.querySelectorAll(".turn").length : 0,
+              demande: Boolean(fil && fil.textContent.includes("durcis l'escalade")),
+              saisie: Boolean(fil && fil.querySelector("textarea")),
+              cassetins: document.querySelectorAll(".cassetin").length,
+              gestes: Boolean(document.querySelector(".cassetin-acts")),
+            });
+            document.body.appendChild(out);
+          }, 400);
+        }, 500);
       }, 1700);
     </script>`,
     check(dom) {
@@ -510,11 +547,26 @@ const SURFACES = [
       assert("et son titre", r.titre);
       assert("window.print appelé une fois exactement", r.appels === 1, `${r.appels} appel(s)`);
 
-      /* Le fil, rendu pour de vrai depuis une entrée de bibliothèque. */
-      assert("« Reprendre le fil » ouvre le fil", r.fil);
+      /* La casse, et le fil rendu depuis une entrée de bibliothèque. */
+      assert("la casse tient ses cassetins", r.cassetins === 1, `${r.cassetins}`);
+      assert("« ⋯ » déplie les gestes du cassetin", r.gestes);
+      assert("ouvrir un cassetin remet le prompt sur le marbre", r.fil);
       assert("les tours du fil sont affichés", r.tours === 2, `${r.tours} tour(s)`);
       assert("la demande enregistrée est relue", r.demande);
       assert("la zone de correction est là", r.saisie);
+
+      /* Mesure supplémentaire, tiroir ouvert : c'est l'état où un panneau
+         de 340 px peut déborder un écran de 320. */
+      const casse = /id="PROBE-CASSE">([^<]*)</.exec(dom);
+      if (!casse) return assert("atelier — mesure tiroir ouvert obtenue", false, "sonde muette");
+      for (const pair of casse[1].trim().split(" ")) {
+        const [width, over] = pair.split(":");
+        assert(
+          `casse ouverte — aucun débordement à ${width} px`,
+          Number(over) === 0,
+          `${over} élément(s) trop large(s)`
+        );
+      }
     },
   },
 ];
@@ -537,6 +589,11 @@ if (!existsSync(CHROME) || !bundle) {
         `${over} élément(s) trop large(s)`
       );
     }
+    assert(
+      `${surface.label} — aucun élément fixe plus large que la fenêtre`,
+      measured.fixes === 0,
+      `${measured.fixes} élément(s)`
+    );
     surface.check?.(measured.dom);
   }
 }
@@ -578,6 +635,10 @@ if (!ANTHROPIC) {
   /* Exactement la boucle de l'atelier : générer, mesurer, réparer. */
   const run = await runVerifiedGeneration({
     ask: async (convo) => {
+      /* Le compteur repart à CHAQUE appel : une réparation en lance un
+         second, dont le texte recommence à zéro. La croissance se juge à
+         l'intérieur d'un appel, pas d'un appel à l'autre. */
+      seen = 0;
       try {
         const { text, usage } = await callClaude(convo, {
           apiKey: ANTHROPIC,
@@ -764,8 +825,10 @@ async function measureOverflow({ label, routes, action }) {
   const widths = found[1]
     .trim()
     .split(" ")
+    .filter((pair) => !pair.startsWith("fixes:"))
     .map((pair) => pair.split(":").map(Number));
-  return { dom, widths };
+  const fixes = Number(/fixes:(\d+)/.exec(found[1])?.[1] ?? -1);
+  return { dom, widths, fixes };
 }
 
 function readAll(dir) {
