@@ -485,7 +485,10 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
             value={idea}
             onChange={(e) => setIdea(e.target.value)}
             disabled={busy}
-            placeholder="Exemple : rendre un ERP open source agentique pour qu'une seule personne fasse tourner sa PME — l'humain ne valide que le critique…"
+            placeholder={
+              "Exemple : une app d'échecs en ligne — parties en direct, classement Elo, puzzles quotidiens ; l'humain ne valide que les mises en production…\n\n" +
+              "Ou : un algo de ML qui prédit les ruptures de stock d'un e-commerce depuis l'historique de ventes, réentraîné chaque nuit, avec un tableau de bord de dérive…"
+            }
           />
 
           <button
