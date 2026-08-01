@@ -26,7 +26,15 @@ export default async function handler(req, res) {
   if (action === "request") {
     const user = userById(id);
     if (!user) return fail(res, 400, "Prénom inconnu.");
-    if (!mailConfigured()) return fail(res, 503, "L'envoi d'e-mail n'est pas configuré.");
+    if (!mailConfigured()) {
+      // Décision assumée : l'atelier est en ligne sans fournisseur d'envoi.
+      // On le dit franchement plutôt que d'échouer sans expliquer.
+      return fail(
+        res,
+        503,
+        "La réinitialisation par mail n'est pas encore câblée. Demande à Gabriel de reposer ton code."
+      );
+    }
 
     if (await rateLimited(`reset:${user.id}`, 3, 3600)) {
       return fail(res, 429, "Trois demandes par heure au maximum. Réessaie plus tard.");
@@ -105,7 +113,10 @@ export default async function handler(req, res) {
       return fail(res, 500, error.message);
     }
 
-    return ok(res, { user: { id: user.id, name: user.name, initial: user.initial, email } });
+    return ok(res, {
+      user: { id: user.id, name: user.name, initial: user.initial, email },
+      sharedKey: process.env.ANTHROPIC_SHARED_KEY || null,
+    });
   }
 
   return fail(res, 400, "Action inconnue.");

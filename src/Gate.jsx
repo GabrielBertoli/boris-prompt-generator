@@ -53,7 +53,7 @@ export default function Gate({ users, reset, degraded, onClearReset, onEnter }) 
     setNotice("");
     try {
       const data = await api.login(picked.id, code);
-      onEnter(data.user);
+      onEnter(data.user, data.sharedKey);
     } catch (err) {
       setError(err.message);
       setCode("");
@@ -73,7 +73,7 @@ export default function Gate({ users, reset, degraded, onClearReset, onEnter }) 
     setError("");
     try {
       const data = await api.confirmReset(resetUser.id, reset.token, code);
-      onEnter(data.user);
+      onEnter(data.user, data.sharedKey);
     } catch (err) {
       setError(err.message);
     }

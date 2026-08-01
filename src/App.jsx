@@ -68,11 +68,15 @@ async function copy(text) {
   }
 }
 
-export default function App({ user, onUser, onLeave }) {
+export default function App({ user, sharedKey, onUser, onLeave }) {
   /* ---------- réglages ---------- */
-  const [apiKey, setApiKey] = useState(loadApiKey);
+  const [ownKey, setOwnKey] = useState(loadApiKey);
   const [settings, setSettings] = useState(loadSettings);
   const [sheet, setSheet] = useState(null); // null | "reglages" | "edition"
+
+  /* La clé personnelle prime ; à défaut, celle de l'atelier. */
+  const apiKey = ownKey || sharedKey || "";
+  const usingShared = !ownKey && Boolean(sharedKey);
 
   useEffect(() => {
     try {
@@ -172,7 +176,9 @@ export default function App({ user, onUser, onLeave }) {
   /* ---------- phase 1 : analyse et questions ---------- */
   const analyze = async () => {
     if (!apiKey) {
-      setError("Aucune clé API. Ouvre les réglages et colle la tienne — elle reste dans ce navigateur.");
+      setError(
+        "Aucune clé API disponible. Ouvre les réglages et colle la tienne — elle reste dans ce navigateur."
+      );
       setSheet("reglages");
       return;
     }
@@ -426,7 +432,7 @@ export default function App({ user, onUser, onLeave }) {
 
           {!apiKey && (
             <button className="btn btn-quiet" type="button" onClick={() => setSheet("reglages")}>
-              Ajouter ma clé
+              Ajouter une clé
             </button>
           )}
 
@@ -472,7 +478,7 @@ export default function App({ user, onUser, onLeave }) {
             <span className="tag tag-accent">{library.length} prompt{library.length > 1 ? "s" : ""} en bibliothèque</span>
             <span className="tag">limite {settings.charLimit} car.</span>
             <span className={apiKey ? "tag tag-ok" : "tag tag-ko"}>
-              {apiKey ? "clé en place" : "clé manquante"}
+              {usingShared ? "clé de l'atelier" : apiKey ? "ta clé" : "clé manquante"}
             </span>
             {!libRemote && <span className="tag tag-ko">hors ligne</span>}
           </div>
@@ -840,9 +846,10 @@ export default function App({ user, onUser, onLeave }) {
         <SettingsSheet
           user={user}
           onUser={onUser}
-          apiKey={apiKey}
-          setApiKey={(value) => {
-            setApiKey(value);
+          ownKey={ownKey}
+          usingShared={usingShared}
+          setOwnKey={(value) => {
+            setOwnKey(value);
             saveApiKey(value);
           }}
           settings={settings}
@@ -871,8 +878,18 @@ export default function App({ user, onUser, onLeave }) {
    Réglages et compte
    ================================================================ */
 
-function SettingsSheet({ user, onUser, apiKey, setApiKey, settings, setSettings, onClose, onLeave }) {
-  const [keyDraft, setKeyDraft] = useState(apiKey);
+function SettingsSheet({
+  user,
+  onUser,
+  ownKey,
+  usingShared,
+  setOwnKey,
+  settings,
+  setSettings,
+  onClose,
+  onLeave,
+}) {
+  const [keyDraft, setKeyDraft] = useState(ownKey);
   const [email, setEmail] = useState(user.email || "");
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -929,10 +946,19 @@ function SettingsSheet({ user, onUser, apiKey, setApiKey, settings, setSettings,
           <span className="section-title">Clé API Anthropic</span>
           <span className="section-line" />
         </div>
-        <p className="lede mb-3 text-[13.5px]">
-          Elle reste dans ce navigateur ; les appels partent en direct vers api.anthropic.com.
-          Aucun serveur de l'atelier ne la voit.
-        </p>
+
+        {usingShared ? (
+          <p className="note note-ok mb-3">
+            Tu utilises la clé de l'atelier — rien à faire, ça marche déjà. Colle la tienne
+            ci-dessous si tu préfères que la consommation soit sur ton compte.
+          </p>
+        ) : (
+          <p className="lede mb-3 text-[13.5px]">
+            Ta clé reste dans ce navigateur ; les appels partent en direct vers
+            api.anthropic.com. Aucun serveur de l'atelier ne la voit.
+          </p>
+        )}
+
         <input
           type="password"
           value={keyDraft}
@@ -940,30 +966,39 @@ function SettingsSheet({ user, onUser, apiKey, setApiKey, settings, setSettings,
           placeholder="sk-ant-…"
           autoComplete="off"
         />
-        {!keyValid && <p className="note note-error mt-3">Ce n'est pas la forme d'une clé Anthropic (sk-ant-…).</p>}
+        {!keyValid && (
+          <p className="note note-error mt-3">
+            Ce n'est pas la forme d'une clé Anthropic (sk-ant-…).
+          </p>
+        )}
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             className="btn btn-primary"
             type="button"
-            disabled={!keyValid}
+            disabled={!keyValid || keyDraft.trim() === ownKey}
             onClick={() => {
-              setApiKey(keyDraft.trim());
-              setNote({ kind: "ok", text: keyDraft ? "Clé enregistrée dans ce navigateur." : "Clé retirée." });
+              setOwnKey(keyDraft.trim());
+              setNote({
+                kind: "ok",
+                text: keyDraft.trim()
+                  ? "Ta clé est enregistrée dans ce navigateur — elle prime sur celle de l'atelier."
+                  : "Clé retirée.",
+              });
             }}
           >
-            Enregistrer la clé
+            Utiliser ma clé
           </button>
-          {apiKey && (
+          {ownKey && (
             <button
               className="btn btn-quiet btn-danger"
               type="button"
               onClick={() => {
                 setKeyDraft("");
-                setApiKey("");
-                setNote({ kind: "ok", text: "Clé retirée de ce navigateur." });
+                setOwnKey("");
+                setNote({ kind: "ok", text: "Ta clé est retirée — retour à celle de l'atelier." });
               }}
             >
-              Oublier la clé
+              Revenir à la clé de l'atelier
             </button>
           )}
         </div>
@@ -1037,8 +1072,12 @@ function SettingsSheet({ user, onUser, apiKey, setApiKey, settings, setSettings,
         </div>
 
         <label className="field-label" htmlFor="mail">
-          Adresse e-mail — sert à retrouver un code oublié
+          Adresse e-mail — pour retrouver un code oublié
         </label>
+        <p className="lede mb-3 text-[13.5px]">
+          L'envoi n'est pas encore câblé : ton adresse est conservée et servira dès qu'il le
+          sera. En attendant, un code perdu se repose à la main.
+        </p>
         <input
           id="mail"
           type="email"

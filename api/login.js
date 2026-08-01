@@ -58,5 +58,8 @@ export default async function handler(req, res) {
     email = null;
   }
 
-  return ok(res, { user: { id: user.id, name: user.name, initial: user.initial, email } });
+  return ok(res, {
+    user: { id: user.id, name: user.name, initial: user.initial, email },
+    sharedKey: process.env.ANTHROPIC_SHARED_KEY || null,
+  });
 }

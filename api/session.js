@@ -33,10 +33,17 @@ export default async function handler(req, res) {
     }
   }
 
+  /* Clé de l'atelier : servie UNIQUEMENT à une session valide, jamais au
+     portail, jamais dans le bundle. Elle part ensuite en direct du
+     navigateur vers Anthropic — le serveur ne relaie aucun appel.
+     Conséquence assumée : qui entre peut la lire dans son navigateur. */
+  const sharedKey = process.env.ANTHROPIC_SHARED_KEY || null;
+
   return send(res, 200, {
     ok: true,
     authenticated: true,
     users: roster,
     user: { id: user.id, name: user.name, initial: user.initial, email },
+    sharedKey,
   });
 }

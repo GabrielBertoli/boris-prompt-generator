@@ -97,11 +97,21 @@ body {
 
 /* ---------- typographie ---------- */
 
+/* Un enfant de grille vaut `min-width: auto` par défaut : il refuse de
+   descendre sous la largeur mini de son contenu. Un titre serif de 42 px
+   suffit alors à pousser toute la page au-delà du viewport — le texte se
+   fait couper à droite et la grille des prénoms croit avoir la place pour
+   deux colonnes. Mesuré sur iPhone 390 px. */
+.atelier :where(main, section, header, article, div, h1, p) {
+  min-width: 0;
+}
+
 .display {
   font-family: var(--font-display);
   font-weight: 400;
   letter-spacing: -0.018em;
   line-height: 0.98;
+  overflow-wrap: break-word;
 }
 
 .display em {
@@ -131,7 +141,7 @@ body {
   color: var(--muted);
   font-size: 16px;
   line-height: 1.65;
-  max-width: 58ch;
+  max-width: min(58ch, 100%);
 }
 
 /* ---------- surfaces ---------- */
@@ -445,7 +455,7 @@ select:disabled {
 
 .gate-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
   gap: 14px;
 }
 
@@ -514,7 +524,7 @@ select:disabled {
 
 .lib-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 14px;
 }
 
@@ -762,6 +772,13 @@ pre {
 @media (max-width: 640px) {
   .counter {
     font-size: 44px;
+  }
+  /* Le titre se cale sur la largeur réelle, pas sur un plancher en pixels. */
+  .display {
+    font-size: clamp(30px, 8.4vw, 44px) !important;
+  }
+  .gate-initial {
+    font-size: 46px;
   }
   .btn {
     padding: 11px 18px;

@@ -12,7 +12,13 @@ const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 const KEY_STORAGE = "atelier-boris:cle-api";
 
-/* ---------- clé du visiteur : navigateur uniquement ---------- */
+/* ---------- clé du visiteur : navigateur uniquement ----------
+
+   Deux origines possibles, dans cet ordre :
+   1. la clé PERSONNELLE, collée dans les réglages et gardée ici même ;
+   2. à défaut, la clé de l'atelier, servie par /api/session à une session
+      valide — jamais au portail, jamais dans le bundle.
+   La personnelle gagne toujours : c'est elle qu'on a choisi de poser. */
 
 export function loadApiKey() {
   try {

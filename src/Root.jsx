@@ -7,6 +7,9 @@ import App from "./App.jsx";
 export default function Root() {
   const [state, setState] = useState({ phase: "loading", user: null, users: [] });
   const [reset, setReset] = useState(null);
+  /* Clé de l'atelier : reçue à la connexion, gardée en mémoire seulement —
+     jamais recopiée dans localStorage, pour qu'une sortie l'emporte. */
+  const [sharedKey, setSharedKey] = useState(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -24,6 +27,7 @@ export default function Root() {
       try {
         const data = await api.session();
         if (!alive) return;
+        setSharedKey(data.sharedKey || null);
         setState({
           phase: data.authenticated ? "in" : "gate",
           user: data.user,
@@ -40,8 +44,9 @@ export default function Root() {
     };
   }, []);
 
-  const onEnter = useCallback((user) => {
+  const onEnter = useCallback((user, key) => {
     setReset(null);
+    if (key !== undefined) setSharedKey(key || null);
     setState((s) => ({ ...s, phase: "in", user }));
   }, []);
 
@@ -51,6 +56,7 @@ export default function Root() {
     } catch {
       /* le cookie expire de toute façon */
     }
+    setSharedKey(null); // la clé de l'atelier ne survit pas à la sortie
     setState((s) => ({ ...s, phase: "gate", user: null }));
   }, []);
 
@@ -78,5 +84,5 @@ export default function Root() {
     );
   }
 
-  return <App user={state.user} onUser={onUser} onLeave={onLeave} />;
+  return <App user={state.user} sharedKey={sharedKey} onUser={onUser} onLeave={onLeave} />;
 }

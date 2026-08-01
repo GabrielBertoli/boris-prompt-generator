@@ -8,8 +8,19 @@
    en code 1 : rien ne se déclare au vert sur une impression.
 */
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import {
+  appendFileSync,
+  cpSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from "node:fs";
+import { extname, join } from "node:path";
+import { createServer } from "node:http";
+import { execFile } from "node:child_process";
+import { tmpdir } from "node:os";
 
 loadEnvFile(".env.local");
 loadEnvFile(".env");
@@ -44,6 +55,7 @@ const SECRET_NAMES = [
   "RESEND_API_KEY",
   "ANTHROPIC_TEST_KEY",
   "ANTHROPIC_API_KEY",
+  "ANTHROPIC_SHARED_KEY",
 ];
 
 let bundle = "";
@@ -77,10 +89,14 @@ if (!BASE) {
 } else {
   section(`Accès — ${BASE}`);
 
-  const anon = await call("/api/session");
+  const anon = await callRaw("/api/session");
   assert("GET /api/session répond 200", anon.status === 200, `reçu ${anon.status}`);
   assert("anonyme = non authentifié", anon.body?.authenticated === false);
   assert("trois prénoms proposés", anon.body?.users?.length === 3, list(anon.body?.users));
+  assert(
+    "aucune clé servie au portail",
+    !anon.body?.sharedKey && !JSON.stringify(anon.body).includes("sk-ant-")
+  );
 
   const wrong = await call("/api/login", "POST", { id: USER, code: "code-manifestement-faux" });
   assert("mauvais code bloqué", wrong.status === 401, `reçu ${wrong.status}`);
@@ -97,6 +113,19 @@ if (!BASE) {
     const me = await call("/api/session");
     assert("session reconnue", me.body?.authenticated === true);
     assert("bon utilisateur", me.body?.user?.id === USER, me.body?.user?.id);
+
+    /* La clé de l'atelier ne sort que pour une session valide. */
+    const shared = process.env.ANTHROPIC_SHARED_KEY;
+    if (shared) {
+      assert(
+        "clé de l'atelier servie à la session",
+        me.body?.sharedKey === shared,
+        me.body?.sharedKey ? "reçue" : "absente"
+      );
+      assert("clé de l'atelier absente du bundle", !bundle || !bundle.includes(shared));
+    } else {
+      console.log("… clé de l'atelier non vérifiée : ANTHROPIC_SHARED_KEY absent en local.");
+    }
 
     /* bibliothèque : écrire, relire, effacer */
     const marker = `vérification ${new Date().toISOString()}`;
@@ -145,7 +174,111 @@ if (!BASE) {
   }
 }
 
-/* ---------- 3. le générateur, contre la vraie API ---------- */
+/* ---------- 3. mobile : aucun débordement horizontal ---------- */
+
+section("Mobile");
+
+const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+
+if (!existsSync(CHROME) || !bundle) {
+  console.log("… ignoré : Chrome ou dist/ introuvable.");
+} else {
+  const probe = join(tmpdir(), `bpg-probe-${process.pid}`);
+  rmSync(probe, { recursive: true, force: true });
+  cpSync("dist", probe, { recursive: true });
+
+  /* `--window-size` est ignoré par ce Chrome headless : le viewport reste
+     à 485 px quoi qu'on demande. On force donc la largeur de mise en page
+     depuis la page elle-même, puis on cherche un élément plus large que
+     son conteneur — la signature d'un `min-width: auto` non maîtrisé. */
+  appendFileSync(
+    join(probe, "index.html"),
+    `<script>setTimeout(() => {
+      const out = [];
+      for (const W of [320, 360, 390, 430]) {
+        document.documentElement.style.width = W + "px";
+        document.documentElement.style.overflowX = "visible";
+        document.body.style.overflowX = "visible";
+        void document.body.offsetWidth;
+        let over = 0;
+        document.querySelectorAll("*").forEach((el) => {
+          if (el.id !== "PROBE" && el.getBoundingClientRect().width > W + 1) over += 1;
+        });
+        out.push(W + ":" + over);
+      }
+      const p = document.createElement("pre");
+      p.id = "PROBE";
+      p.textContent = out.join(" ");
+      document.body.appendChild(p);
+    }, 1200);</script>`
+  );
+
+  const server = createServer((req, res) => {
+    const url = (req.url || "/").split("?")[0];
+    if (url.startsWith("/api/")) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ ok: true, authenticated: false, users: [], user: null }));
+    }
+    try {
+      const file = url === "/" ? "/index.html" : url;
+      const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
+      res.writeHead(200, { "Content-Type": types[extname(file)] || "application/octet-stream" });
+      res.end(readFileSync(join(probe, file)));
+    } catch {
+      res.writeHead(404).end("");
+    }
+  });
+
+  await new Promise((r) => server.listen(0, r));
+  const port = server.address().port;
+
+  /* Lancement ASYNCHRONE, impérativement.
+     Mesuré : `execFileSync` bloque la boucle d'événements de Node — le
+     serveur ouvert juste au-dessus, dans ce même processus, ne pouvait
+     alors plus répondre à Chrome. Interblocage parfait, vérificateur
+     suspendu sans un octet de sortie.
+     Pas de `--user-data-dir` jetable : mesuré, un profil neuf fait pendre
+     `--dump-dom` au-delà de la minute, là où le profil par défaut rend la
+     main en quelques secondes. Le garde-fou est le délai ci-dessous. */
+  let dom = "";
+  try {
+    dom = await new Promise((resolve, reject) => {
+      const child = execFile(
+        CHROME,
+        [
+          "--headless=new",
+          "--disable-gpu",
+          "--virtual-time-budget=6000",
+          "--dump-dom",
+          `http://localhost:${port}/`,
+        ],
+        { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
+        (error, stdout) => (error ? reject(error) : resolve(stdout))
+      );
+      setTimeout(() => {
+        child.kill("SIGKILL");
+        reject(new Error("Chrome n'a pas rendu la main en 60 s"));
+      }, 60000).unref();
+    });
+  } catch (error) {
+    assert("Chrome a répondu", false, error.message.split("\n")[0]);
+  }
+
+  server.close();
+  rmSync(probe, { recursive: true, force: true });
+
+  const found = /id="PROBE">([^<]*)</.exec(dom);
+  if (dom && !found) {
+    assert("mesure du débordement obtenue", false, "sonde muette");
+  } else if (found) {
+    for (const pair of found[1].trim().split(" ")) {
+      const [width, over] = pair.split(":");
+      assert(`aucun débordement à ${width} px`, Number(over) === 0, `${over} élément(s) trop large(s)`);
+    }
+  }
+}
+
+/* ---------- 4. le générateur, contre la vraie API ---------- */
 
 section("Générateur (appel direct Anthropic)");
 
