@@ -1,5 +1,9 @@
 # État du run
 
+**EN PRODUCTION** — https://boris-prompt-generator.vercel.app
+Promue par Gabriel le 2026-08-01, vérificateur intégralement au vert sur
+l'alias stable.
+
 Mis à jour le 2026-08-01. L'état vit ici : une coupure se reprend en lisant
 ce fichier, pas en refaisant le chemin.
 
@@ -24,8 +28,8 @@ sur tout ce qui ne dépend pas des deux fournisseurs.
 | Sauvegarde puis rechargement | ✅ | écrit, relu, supprimé ; 401 sans session |
 | Mobile | ✅ | zéro débordement mesuré à 320, 360, 390 et 430 px |
 
-Preview courante :
-`https://boris-prompt-generator-3alg21uey-coe-startup.vercel.app`
+Production : `https://boris-prompt-generator.vercel.app` (alias stable).
+Dernière preview : `https://boris-prompt-generator-3alg21uey-coe-startup.vercel.app`
 
 Comptes en place : Gabriel `1966G`, Karl `1994K`, Raphaëlle `2000R`,
 Gabriela `2000G` — les quatre vérifiés, bon code accepté et mauvais refusé.
@@ -145,3 +149,20 @@ deux colonnes de 298,5 px, quatre cartes en 2×2, opacité 1 partout.
 montrait une seule carte sur quatre — artefact de peinture, pas de bug : la
 sonde DOM a confirmé les quatre cartes visibles et bien placées. Mesurer,
 pas regarder.
+
+## Le limiteur, et comment le lire
+
+Huit tentatives de connexion par personne **et par adresse IP**, sur dix
+minutes glissantes. Deux enfants sur le même Wi-Fi ont donc chacun leur
+compteur : personne ne verrouille personne.
+
+Trois refus à ne pas confondre, tous vérifiés en production :
+
+| Code | Sens |
+|---|---|
+| `400` | code de moins de 4 caractères — rejeté avant toute comparaison |
+| `401` | code refusé |
+| `429` | limiteur : huit essais dépassés, dix minutes d'attente |
+
+Un `429` pendant une mise au point n'est pas une panne : c'est le compteur
+du vérificateur qui s'ajoute aux essais manuels sur le même compte.
