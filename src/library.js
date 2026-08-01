@@ -52,7 +52,7 @@ export async function persistLibrary(userId, items) {
 
 export const countChars = (value) => [...String(value)].length;
 
-export function makeEntry({ idea, mode, prompt, limit, version, title }) {
+export function makeEntry({ idea, mode, prompt, limit, version, title, chat }) {
   const now = new Date().toISOString();
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -63,10 +63,60 @@ export function makeEntry({ idea, mode, prompt, limit, version, title }) {
     count: countChars(prompt),
     limit,
     version,
+    chat: Array.isArray(chat) ? chat : [],
     savedAt: now,
     updatedAt: now,
   };
 }
+
+/* ================================================================
+   Le fil de correction.
+
+   Chaque génération porte son fil : ce qu'on a demandé, ce qui est
+   sorti. Il vit dans l'entrée de bibliothèque — donc dans le profil de
+   son propriétaire, et il le suit d'un appareil à l'autre.
+   ================================================================ */
+
+export const MAX_TURNS = 40;
+
+/* Combien de réponses gardent leur texte entier. Le fil sert à corriger,
+   pas à archiver : au-delà des trois dernières, une ligne suffit à dire ce
+   qui s'est passé, et la bibliothèque reste sous la taille que le magasin
+   accepte. Sans cette coupe, douze corrections sur une entrée pèsent déjà
+   plus que la limite de charge utile. */
+const KEEP_FULL = 3;
+
+export function appendTurn(chat, turn) {
+  const list = Array.isArray(chat) ? chat : [];
+  const next = [...list, { ...turn, at: turn.at || new Date().toISOString() }];
+  return compactChat(next.slice(-MAX_TURNS));
+}
+
+export function compactChat(chat) {
+  const keep = new Set();
+  for (let i = chat.length - 1; i >= 0 && keep.size < KEEP_FULL; i -= 1) {
+    if (chat[i].role === "atelier" && !chat[i].compacted) keep.add(i);
+  }
+
+  return chat.map((turn, i) => {
+    if (turn.role !== "atelier" || turn.compacted || keep.has(i)) return turn;
+    return {
+      role: "atelier",
+      at: turn.at,
+      version: turn.version,
+      count: turn.count,
+      pass: turn.pass,
+      compacted: true,
+      text: `v${turn.version} — ${turn.count} caractères, ${
+        turn.pass ? "au vert" : "hors limite"
+      }. Texte plus ancien, non conservé.`,
+    };
+  });
+}
+
+/* Une réponse dont le texte a survécu peut être remise en place. */
+export const canRestore = (turn) =>
+  Boolean(turn && turn.role === "atelier" && !turn.compacted && turn.text);
 
 /* ================================================================
    Ce qu'on peut faire d'un prompt qu'on possède.
@@ -153,6 +203,22 @@ function normalize(raw) {
     count: countChars(prompt),
     limit: Number(raw.limit) > 0 ? Number(raw.limit) : 3900,
     version: Number(raw.version) > 0 ? Number(raw.version) : 1,
+    chat: Array.isArray(raw.chat)
+      ? compactChat(
+          raw.chat
+            .filter((t) => t && typeof t.text === "string")
+            .slice(-MAX_TURNS)
+            .map((t) => ({
+              role: t.role === "moi" ? "moi" : "atelier",
+              text: t.text,
+              at: typeof t.at === "string" ? t.at : savedAt,
+              ...(t.version ? { version: Number(t.version) } : {}),
+              ...(t.count ? { count: Number(t.count) } : {}),
+              ...(t.pass != null ? { pass: Boolean(t.pass) } : {}),
+              ...(t.compacted ? { compacted: true } : {}),
+            }))
+        )
+      : [],
     savedAt,
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : savedAt,
   };

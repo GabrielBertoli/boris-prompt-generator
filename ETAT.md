@@ -1,8 +1,17 @@
 # État du run
 
 **EN PRODUCTION** — https://boris-prompt-generator.vercel.app
-Déployée sur ordre de Gabriel le 2026-08-01, **77 assertions au vert sur
+Déployée sur ordre de Gabriel le 2026-08-01, **111 assertions au vert sur
 l'alias stable** après coup. Zéro échec.
+
+**Panne corrigée le 2026-08-01 : une génération pouvait tourner plus de
+trois minutes, muette.** Rien ne bornait l'appel à `api.anthropic.com` — ni
+délai, ni affichage avant la fin — et la boucle de réparation en enchaîne
+jusqu'à cinq. Une réponse lente était donc indiscernable d'un blocage.
+Réparé par le **flux** (le texte s'affiche pendant qu'il arrive), le temps
+écoulé visible, un délai d'**inactivité** de 60 s réarmé à chaque morceau
+— c'est le silence qui est anormal, pas la durée — et un plafond dur de
+300 s. Mesuré en production : 45 morceaux, premier à 1,6 s.
 
 Mis à jour le 2026-08-01, session close proprement, arbre git propre.
 L'état vit ici : une coupure se reprend en lisant ce fichier, pas en
@@ -14,6 +23,33 @@ de Gabriel (§ « Ce qui reste ouvert »). Tout le reste est livré et vérifié
 
 Reprendre par : `npm run verify` seul (assertions locales), puis avec
 `BASE_URL=…` pour viser un déploiement.
+
+## Le fil de correction
+
+Chaque génération porte son fil : on écrit en français ce qu'il faut
+changer, l'atelier régénère le prompt **entier**, le mesure, et garde la
+trace. « Reprendre le fil » sur une carte rouvre le prompt avec son
+historique ; « Remettre cette version » revient en arrière. L'audit du juge
+entre au fil comme une correction — le fil dit d'où vient chaque version.
+
+**Le fil vit dans l'entrée de bibliothèque**, donc dans le profil de son
+propriétaire (`/api/prompts`, clé dérivée de la session), et il suit d'un
+appareil à l'autre. La première correction **enregistre d'office** : un fil
+n'est jamais perdu faute d'avoir cliqué « Sauvegarder ».
+
+Deux bornes, sans lesquelles ça ne tiendrait pas :
+
+- **La coupe.** Seules les trois dernières réponses gardent leur texte
+  entier ; au-delà, une ligne dit ce qu'elles étaient (`v3 — 3 240
+  caractères, au vert`). Les demandes, elles, ne sont jamais coupées. Sans
+  cette coupe, douze corrections sur une entrée dépassent à elles seules la
+  charge utile acceptée. Une version coupée ne se restaure plus — c'est le
+  prix, il est dit dans l'interface.
+- **La reconstruction.** Une correction repart TOUJOURS du prompt en
+  vigueur (`baseConvoFor` : méthode + idée + dernier état), jamais de la
+  conversation accumulée. Coût borné, et surtout comportement **identique
+  avant et après un rechargement** — le fil ne se comporte pas différemment
+  selon que la page a été rouverte ou non.
 
 ## Ce qu'on peut faire d'un prompt qu'on possède
 
@@ -61,7 +97,7 @@ variables de l'environnement Preview fonctionnent donc pour de bon, et la
 bibliothèque réelle de Gabriela est ressortie intacte de la sonde (une
 entrée conservée, la sonde effacée).
 
-### Puis, après les gestes de bibliothèque : **77 assertions**
+### Puis, après les gestes de bibliothèque : **77 assertions**, et **111** après le fil
 
 Production déployée sur ordre de Gabriel et vérifiée dans la foulée (compte
 Gabriel, `1966G`). Le vérificateur a gagné 34 assertions :

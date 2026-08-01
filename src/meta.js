@@ -133,3 +133,39 @@ export function formatCost(dollars) {
 
 export const DEFAULT_WRITER = "claude-sonnet-5";
 export const DEFAULT_JUDGE = "claude-opus-5";
+
+/* ---------- reprendre un fil ----------
+
+   Après un rechargement, la conversation brute avec le modèle n'existe
+   plus : elle vivait en mémoire. On la reconstruit à partir de ce qui a
+   été enregistré — le méta-prompt, l'idée, et le prompt en vigueur. Le
+   modèle voit alors exactement ce qu'il faut pour corriger : la méthode,
+   la demande d'origine, et son dernier état. Inutile de rejouer le fil
+   entier, et coûteux de le faire. */
+export function baseConvoFor({ idea, prompt, limit }) {
+  const convo = [
+    {
+      role: "user",
+      content:
+        buildMeta(limit) +
+        "\n\nIDÉE :\n" +
+        (String(idea || "").trim() || "(idée non conservée — pars du prompt ci-dessous)"),
+    },
+  ];
+  if (prompt) convo.push({ role: "assistant", content: prompt });
+  return convo;
+}
+
+/* La consigne de correction : la demande de l'utilisateur, plus les
+   contraintes qui ne se négocient pas. */
+export function correctionInstruction(demand, limit) {
+  const window = targetWindow(limit);
+  return (
+    `CORRECTION DEMANDÉE :\n${String(demand).trim()}\n\n` +
+    "Applique-la au prompt ci-dessus et régénère-le COMPLET — les huit sections " +
+    "'# EN MAJUSCULES' jusqu'à # SORTIE incluse, dans l'ordre. Texte brut uniquement : " +
+    "pas de backticks, pas de commentaire, pas de préambule, aucune phrase qui parle " +
+    "de la correction. Ne change QUE ce qui est demandé ; garde le reste mot pour mot " +
+    `tant que la longueur le permet. Moins de ${limit} caractères, vise ${window.lo} à ${window.hi}.`
+  );
+}

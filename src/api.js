@@ -42,10 +42,31 @@ export const looksLikeKey = (key) => /^sk-ant-[A-Za-z0-9_-]{20,}$/.test(String(k
 
 /* ---------- appel Claude ---------- */
 
-export async function callClaude(messages, { apiKey, model, maxTokens = 4000, system }) {
+/* Appel EN FLUX, et borné dans le temps.
+
+   Mesuré le 2026-08-01 : une génération pouvait tourner plus de trois
+   minutes sans qu'aucune limite ne s'y oppose et sans qu'aucun caractère
+   n'apparaisse. Deux causes, corrigées ici :
+
+   1. rien ne bornait l'attente — un `fetch` qui traîne ne se termine
+      jamais de lui-même, et la boucle de réparation en enchaîne cinq ;
+   2. rien ne s'affichait avant la fin — une réponse d'une minute était
+      indiscernable d'un blocage.
+
+   D'où le flux (le texte arrive au fur et à mesure, `onDelta`), un délai
+   d'INACTIVITÉ réarmé à chaque morceau reçu — c'est le silence qui est
+   anormal, pas la durée — et un plafond dur au-dessus de tout. */
+
+const STALL_MS = 60000; // silence toléré entre deux morceaux
+const HARD_MS = 300000; // plafond absolu d'un seul appel
+
+export async function callClaude(
+  messages,
+  { apiKey, model, maxTokens = 4000, system, onDelta } = {}
+) {
   if (!apiKey) throw new Error("Aucune clé API — ouvre les réglages et colle la tienne.");
 
-  const payload = { model, max_tokens: maxTokens, messages };
+  const payload = { model, max_tokens: maxTokens, messages, stream: true };
   if (system) payload.system = system;
 
   // Réflexion coupée : la longueur de sortie reste prévisible sous max_tokens,
@@ -55,7 +76,30 @@ export async function callClaude(messages, { apiKey, model, maxTokens = 4000, sy
     payload.thinking = { type: "disabled" };
   }
 
+  const controller = new AbortController();
+  let expired = "";
+  let stall;
+
+  /* Réarmé à chaque morceau : un modèle lent reste acceptable, un modèle
+     muet ne l'est pas. */
+  const arm = () => {
+    clearTimeout(stall);
+    stall = setTimeout(() => {
+      expired = `api.anthropic.com n'a plus rien envoyé depuis ${STALL_MS / 1000} s — appel abandonné.`;
+      controller.abort();
+    }, STALL_MS);
+  };
+  const hard = setTimeout(() => {
+    expired = `L'appel a dépassé ${HARD_MS / 1000} s — abandonné.`;
+    controller.abort();
+  }, HARD_MS);
+  const disarm = () => {
+    clearTimeout(stall);
+    clearTimeout(hard);
+  };
+
   let response;
+  arm();
   try {
     response = await fetch(ANTHROPIC_URL, {
       method: "POST",
@@ -66,12 +110,16 @@ export async function callClaude(messages, { apiKey, model, maxTokens = 4000, sy
         "anthropic-dangerous-direct-browser-access": "true",
       },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
   } catch {
+    disarm();
+    if (expired) throw new Error(expired);
     throw new Error("Le navigateur n'a pas pu joindre api.anthropic.com (réseau ou blocage).");
   }
 
   if (!response.ok) {
+    disarm();
     let detail = "";
     try {
       const error = await response.json();
@@ -82,25 +130,68 @@ export async function callClaude(messages, { apiKey, model, maxTokens = 4000, sy
     throw new Error(describe(response.status, detail));
   }
 
-  const data = await response.json();
+  let text = "";
+  let stopReason = null;
+  const usage = { input_tokens: 0, output_tokens: 0 };
 
-  if (data.stop_reason === "refusal") {
+  try {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      arm();
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const raw = line.slice(5).trim();
+        if (!raw || raw === "[DONE]") continue;
+
+        let event;
+        try {
+          event = JSON.parse(raw);
+        } catch {
+          continue; // morceau incomplet : il reviendra entier
+        }
+
+        if (event.type === "message_start" && event.message?.usage) {
+          Object.assign(usage, event.message.usage);
+        } else if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
+          text += event.delta.text;
+          onDelta?.(text);
+        } else if (event.type === "message_delta") {
+          if (event.delta?.stop_reason) stopReason = event.delta.stop_reason;
+          if (event.usage?.output_tokens != null) usage.output_tokens = event.usage.output_tokens;
+        } else if (event.type === "error") {
+          throw new Error(event.error?.message || "Le flux a été interrompu par une erreur.");
+        }
+      }
+    }
+  } catch (error) {
+    if (expired) throw new Error(expired);
+    throw error;
+  } finally {
+    disarm();
+  }
+
+  if (stopReason === "refusal") {
     throw new Error("Le modèle a décliné cette demande. Reformule l'idée.");
   }
 
-  const text = (data.content || [])
-    .map((block) => (block.type === "text" ? block.text : ""))
-    .filter(Boolean)
-    .join("\n");
-
   if (!text.trim()) {
-    if (data.stop_reason === "max_tokens") {
+    if (stopReason === "max_tokens") {
       throw new Error("Réponse coupée par la limite de jetons. Baisse la limite de caractères.");
     }
     throw new Error("Réponse vide du modèle.");
   }
 
-  return { text, truncated: data.stop_reason === "max_tokens", usage: data.usage || null };
+  return { text, truncated: stopReason === "max_tokens", usage };
 }
 
 function describe(status, detail) {

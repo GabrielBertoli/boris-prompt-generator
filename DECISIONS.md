@@ -141,6 +141,50 @@ portail, « Dupliquer » pour l'atelier). Sans lui, une page qui ne se rend pas
 donnerait « zéro débordement » — un faux vert. La règle générale : une mesure
 n'a de valeur que si l'on prouve d'abord qu'on a mesuré la bonne chose.
 
+## 14. Appel en flux, et borné dans le temps
+
+Une génération pouvait tourner plus de trois minutes sans qu'aucune limite
+ne s'y oppose et sans qu'un seul caractère n'apparaisse. Deux manques, pas
+un : rien ne bornait l'attente (un `fetch` qui traîne ne se termine jamais
+de lui-même, et la boucle de réparation en enchaîne cinq), et rien ne
+s'affichait avant la fin.
+
+Le flux règle le second (`onDelta` : le texte arrive au fur et à mesure).
+Pour le premier, le délai porte sur l'**inactivité** — 60 s réarmées à
+chaque morceau reçu — et non sur la durée totale : un modèle lent reste
+acceptable, un modèle muet ne l'est pas. Un plafond dur de 300 s couvre le
+reste. Le vérificateur appelle désormais `callClaude` lui-même : il ne
+recopie plus le `fetch`, pour la même raison qu'il ne recopie plus la
+boucle de génération.
+
+## 15. Le fil de correction vit dans l'entrée, coupé et reconstruit
+
+Le fil est enregistré **dans l'entrée de bibliothèque** — donc dans le
+profil, par `/api/prompts`, sans nouvelle surface serveur. C'est le
+prolongement de la décision n° 8, pas un nouvel élargissement.
+
+Deux bornes le rendent tenable :
+
+**La coupe.** Seules les trois dernières réponses gardent leur texte
+entier ; au-delà, une ligne les résume. Les demandes ne sont jamais
+coupées : ce sont elles qui disent l'intention, et elles ne pèsent rien.
+Sans cette coupe, douze corrections sur une seule entrée dépassent la
+charge utile — l'écriture de TOUTE la bibliothèque échouerait alors, pas
+seulement celle du fil. Conséquence assumée : une version coupée ne se
+restaure plus.
+
+**La reconstruction.** Une correction repart toujours de `baseConvoFor`
+(méthode + idée + prompt en vigueur), jamais de la conversation accumulée.
+Deux raisons : le coût par appel reste constant quel que soit le nombre de
+corrections, et le comportement est **identique avant et après un
+rechargement**. Rejouer l'historique aurait donné un atelier qui répond
+autrement selon qu'on a rouvert la page ou non — le pire des deux mondes.
+
+Le serveur ne fait confiance à personne : `sanitize` reconstruit chaque
+tour champ par champ et replafonne (40 tours, 24 000 caractères chacun).
+C'est aussi ce qui rend l'assertion nécessaire — un champ non déclaré y
+disparaît en SILENCE, et le profil ne garderait rien.
+
 ---
 
 ## Reste à la main de Gabriel

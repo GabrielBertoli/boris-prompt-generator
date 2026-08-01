@@ -150,6 +150,73 @@ section("Bibliothèque — renommer, dupliquer, exporter");
   );
 }
 
+/* ---------- 1 ter. le fil de correction ---------- */
+
+section("Fil de correction");
+
+{
+  const lib = await import("../src/library.js");
+  const { baseConvoFor, correctionInstruction, buildMeta } = await import("../src/meta.js");
+
+  /* Un fil se construit par tours alternés. */
+  let fil = [];
+  fil = lib.appendTurn(fil, { role: "moi", text: "durcis l'escalade" });
+  fil = lib.appendTurn(fil, { role: "atelier", text: "PROMPT-A", version: 2, count: 3200, pass: true });
+  assert("un tour porte une date", Boolean(fil[0].at));
+  assert("les rôles alternent", fil.map((t) => t.role).join(">") === "moi>atelier");
+
+  /* La coupe : au-delà des trois dernières réponses, le texte cède la place
+     à une ligne. Sans elle, douze corrections dépassent la charge utile. */
+  for (let i = 3; i <= 8; i += 1) {
+    fil = lib.appendTurn(fil, { role: "moi", text: `correction ${i}` });
+    fil = lib.appendTurn(fil, {
+      role: "atelier",
+      text: `PROMPT-${i}`,
+      version: i,
+      count: 3000 + i,
+      pass: true,
+    });
+  }
+
+  const reponses = fil.filter((t) => t.role === "atelier");
+  const entieres = reponses.filter((t) => !t.compacted);
+  assert("seules les 3 dernières réponses gardent leur texte", entieres.length === 3, `${entieres.length}`);
+  assert("ce sont bien les plus récentes", entieres.map((t) => t.version).join(",") === "6,7,8");
+  assert(
+    "une réponse coupée dit ce qu'elle était",
+    reponses[0].compacted && reponses[0].text.includes("v2") && reponses[0].text.includes("3200"),
+    reponses[0].text
+  );
+  assert("les demandes ne sont JAMAIS coupées", fil.filter((t) => t.role === "moi").every((t) => !t.compacted));
+  assert("on ne restaure que ce qui a survécu", !lib.canRestore(reponses[0]) && lib.canRestore(reponses.at(-1)));
+
+  /* Le fil est plafonné en nombre de tours. */
+  let long = [];
+  for (let i = 0; i < 60; i += 1) long = lib.appendTurn(long, { role: "moi", text: `t${i}` });
+  assert(`le fil est plafonné à ${lib.MAX_TURNS} tours`, long.length === lib.MAX_TURNS, `${long.length}`);
+  assert("ce sont les derniers qui restent", long.at(-1).text === "t59");
+
+  /* Un fil survit à l'export et au réimport. */
+  const withChat = { ...lib.makeEntry({ idea: "une idée", prompt: "# QUI TU ES\nx", limit: 3900, version: 3 }), chat: fil };
+  const back = lib.parseBundle(lib.exportBundle([withChat], "karl"));
+  assert("le fil survit à l'aller-retour d'export", back.items[0].chat.length === fil.length, `${back.items[0].chat.length}/${fil.length}`);
+  assert("les tours coupés restent coupés", back.items[0].chat.filter((t) => t.role === "atelier" && !t.compacted).length === 3);
+  assert("une entrée sans fil en reçoit un vide", lib.parseBundle('[{"prompt":"x"}]').items[0].chat.length === 0);
+
+  /* La conversation se reconstruit sans la mémoire de la session. */
+  const convo = baseConvoFor({ idea: "une conciergerie", prompt: "PROMPT-EN-COURS", limit: 3900 });
+  assert("la reconstruction pose la méthode d'abord", convo[0].content.startsWith(buildMeta(3900).slice(0, 40)));
+  assert("elle porte l'idée", convo[0].content.includes("une conciergerie"));
+  assert("puis le prompt en vigueur, côté assistant", convo[1].role === "assistant" && convo[1].content === "PROMPT-EN-COURS");
+  assert("sans prompt, un seul tour", baseConvoFor({ idea: "x", limit: 3900 }).length === 1);
+
+  const consigne = correctionInstruction("  retire la section VÉRIFICATION  ", 3900);
+  assert("la consigne cite la demande", consigne.includes("retire la section VÉRIFICATION"));
+  assert("elle réclame les huit sections", consigne.includes("huit sections"));
+  assert("elle rappelle la limite", consigne.includes("3900"));
+  assert("elle interdit de commenter la correction", consigne.includes("aucune phrase qui parle"));
+}
+
 /* ---------- 2. l'accès ---------- */
 
 if (!BASE) {
@@ -208,6 +275,31 @@ if (!BASE) {
     const marker = `vérification ${new Date().toISOString()}`;
     const before = await call("/api/prompts");
     const existing = before.body?.items || [];
+    /* La sonde porte un FIL : c'est le seul moyen de prouver que le serveur
+       le conserve. Son `sanitize` reconstruit chaque entrée champ par champ
+       et jette tout ce qu'il ne connaît pas — un fil non déclaré y
+       disparaîtrait en silence, et le profil ne garderait rien. */
+    const thread = [
+      { role: "moi", text: "durcis l'escalade", at: new Date().toISOString() },
+      {
+        role: "atelier",
+        text: "# QUI TU ES\nsonde corrigée\n# SORTIE\nSinon tu continues.",
+        at: new Date().toISOString(),
+        version: 2,
+        count: 58,
+        pass: true,
+      },
+      {
+        role: "atelier",
+        text: "v1 — 52 caractères, au vert. Texte plus ancien, non conservé.",
+        at: new Date().toISOString(),
+        version: 1,
+        count: 52,
+        pass: true,
+        compacted: true,
+      },
+    ];
+
     const probe = {
       id: `verify-${Date.now()}`,
       title: marker,
@@ -217,6 +309,7 @@ if (!BASE) {
       count: 52,
       limit: 3000,
       version: 1,
+      chat: thread,
       savedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -225,10 +318,20 @@ if (!BASE) {
     assert("PUT /api/prompts accepté", written.status === 200, `reçu ${written.status}`);
 
     const reread = await call("/api/prompts");
+    const saved = (reread.body?.items || []).find((i) => i.title === marker);
+    assert("prompt relu après écriture", Boolean(saved));
+
+    /* Le fil, dans le profil, après un vrai aller-retour serveur. */
+    assert("le fil est conservé par le serveur", saved?.chat?.length === 3, `${saved?.chat?.length ?? 0}/3 tours`);
+    assert("la demande revient intacte", saved?.chat?.[0]?.text === "durcis l'escalade");
+    assert("le rôle est préservé", saved?.chat?.[0]?.role === "moi");
     assert(
-      "prompt relu après écriture",
-      (reread.body?.items || []).some((i) => i.title === marker)
+      "la réponse revient avec sa version et sa mesure",
+      saved?.chat?.[1]?.version === 2 && saved?.chat?.[1]?.count === 58 && saved?.chat?.[1]?.pass === true,
+      `v${saved?.chat?.[1]?.version} · ${saved?.chat?.[1]?.count} car.`
     );
+    assert("le texte du prompt corrigé revient entier", saved?.chat?.[1]?.text?.includes("sonde corrigée"));
+    assert("un tour coupé reste marqué comme tel", saved?.chat?.[2]?.compacted === true);
 
     const cleaned = await call("/api/prompts", "PUT", { items: existing });
     assert("suppression acceptée", cleaned.status === 200);
@@ -308,6 +411,17 @@ const CARTE_SONDE = {
   count: 52,
   limit: 3900,
   version: 2,
+  chat: [
+    { role: "moi", text: "durcis l'escalade", at: "2026-08-01T10:00:00.000Z" },
+    {
+      role: "atelier",
+      text: "# QUI TU ES\nsonde corrigée\n# SORTIE\nSinon tu continues.",
+      at: "2026-08-01T10:00:30.000Z",
+      version: 2,
+      count: 58,
+      pass: true,
+    },
+  ],
   savedAt: "2026-08-01T10:00:00.000Z",
   updatedAt: "2026-08-01T10:00:00.000Z",
 };
@@ -351,6 +465,17 @@ const SURFACES = [
        boîte d'impression suspendrait Chrome, et le vérificateur avec. */
     action: `<script>
       window.print = () => { window.__printed = (window.__printed || 0) + 1; };
+
+      /* AVANT la mesure de débordement (1500 ms) : on ouvre le fil, sinon
+         il n'est jamais rendu — il n'apparaît qu'avec un prompt chargé — et
+         le contrôle mobile passerait à côté, exactement comme il passait à
+         côté de tout l'atelier avant qu'on serve une session. */
+      setTimeout(() => {
+        const reprise = [...document.querySelectorAll("button")]
+          .find((b) => b.textContent.trim().startsWith("Reprendre le fil"));
+        if (reprise) reprise.click();
+      }, 1100);
+
       setTimeout(() => {
         const btn = [...document.querySelectorAll("button")]
           .find((b) => b.textContent.trim() === "Imprimer");
@@ -359,12 +484,17 @@ const SURFACES = [
           const sheet = document.querySelector(".print-only");
           const out = document.createElement("pre");
           out.id = "PRINT";
+          const fil = document.querySelector(".thread");
           out.textContent = JSON.stringify({
             bouton: Boolean(btn),
             feuille: Boolean(sheet),
             prompt: Boolean(sheet && sheet.textContent.includes("# QUI TU ES")),
             titre: Boolean(sheet && sheet.textContent.includes("conciergerie")),
             appels: window.__printed || 0,
+            fil: Boolean(fil),
+            tours: fil ? fil.querySelectorAll(".turn").length : 0,
+            demande: Boolean(fil && fil.textContent.includes("durcis l'escalade")),
+            saisie: Boolean(fil && fil.querySelector("textarea")),
           });
           document.body.appendChild(out);
         }, 400);
@@ -379,6 +509,12 @@ const SURFACES = [
       assert("elle porte le prompt entier", r.prompt);
       assert("et son titre", r.titre);
       assert("window.print appelé une fois exactement", r.appels === 1, `${r.appels} appel(s)`);
+
+      /* Le fil, rendu pour de vrai depuis une entrée de bibliothèque. */
+      assert("« Reprendre le fil » ouvre le fil", r.fil);
+      assert("les tours du fil sont affichés", r.tours === 2, `${r.tours} tour(s)`);
+      assert("la demande enregistrée est relue", r.demande);
+      assert("la zone de correction est là", r.saisie);
     },
   },
 ];
@@ -427,33 +563,39 @@ if (!ANTHROPIC) {
 
   let httpOk = true;
 
+  /* On appelle `callClaude` — celui de l'atelier, flux compris — et non une
+     copie du fetch. Le vérificateur a déjà déclaré rouge une boucle qu'il
+     avait recopiée : il ne recopie plus rien. */
+  const { callClaude } = await import("../src/api.js");
+
+  let deltas = 0;
+  let onlyGrows = true;
+  let seen = 0;
+  let lastUsage = null;
+  let firstDeltaMs = 0;
+  const t0 = Date.now();
+
   /* Exactement la boucle de l'atelier : générer, mesurer, réparer. */
   const run = await runVerifiedGeneration({
     ask: async (convo) => {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": ANTHROPIC,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
+      try {
+        const { text, usage } = await callClaude(convo, {
+          apiKey: ANTHROPIC,
           model: "claude-sonnet-5",
-          max_tokens: 2700,
-          thinking: { type: "disabled" },
-          messages: convo,
-        }),
-      });
-      if (!response.ok) {
+          maxTokens: 2700,
+          onDelta: (partial) => {
+            deltas += 1;
+            if (!firstDeltaMs) firstDeltaMs = Date.now() - t0;
+            if (partial.length < seen) onlyGrows = false;
+            seen = partial.length;
+          },
+        });
+        lastUsage = usage;
+        return text;
+      } catch (error) {
         httpOk = false;
-        throw new Error(`api.anthropic.com a répondu ${response.status}`);
+        throw error;
       }
-      const data = await response.json();
-      return (data.content || [])
-        .filter((b) => b.type === "text")
-        .map((b) => b.text)
-        .join("\n");
     },
     baseConvo: base,
     instruction:
@@ -481,6 +623,23 @@ if (!ANTHROPIC) {
     const found = sections.filter((s) => run.text.includes(s));
 
     assert("api.anthropic.com répond 200", httpOk);
+
+    /* Le flux : c'est lui qui rend une génération lente lisible plutôt que
+       muette. Sans morceaux, l'atelier retomberait dans l'attente aveugle
+       qui a fait croire à un blocage de trois minutes. */
+    assert("la réponse arrive en flux", deltas > 5, `${deltas} morceau(x)`);
+    assert("le texte ne fait que croître", onlyGrows);
+    assert(
+      "le premier morceau arrive vite",
+      firstDeltaMs > 0 && firstDeltaMs < 30000,
+      `${(firstDeltaMs / 1000).toFixed(1)} s`
+    );
+    assert(
+      "la consommation est mesurée malgré le flux",
+      Number(lastUsage?.input_tokens) > 0 && Number(lastUsage?.output_tokens) > 0,
+      `${lastUsage?.input_tokens} entrée / ${lastUsage?.output_tokens} sortie`
+    );
+
     assert("huit sections présentes", found.length === 8, `${found.length}/8`);
     assert("dans l'ordre", inOrder(run.text, sections));
     assert(

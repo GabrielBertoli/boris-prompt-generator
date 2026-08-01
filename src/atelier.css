@@ -896,3 +896,66 @@ pre {
     margin: 18mm 16mm;
   }
 }
+
+/* ---------- fil de correction ---------- */
+
+.thread {
+  padding-top: 22px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.turn {
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-soft);
+}
+
+/* Ce qu'on a demandé se distingue au premier coup d'œil de ce qui est
+   sorti : la braise pour soi, la surface neutre pour l'atelier. */
+.turn-me {
+  background: color-mix(in srgb, var(--ember) 9%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--ember) 26%, transparent);
+}
+
+.turn-shop {
+  background: var(--surface-2);
+}
+
+.turn-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted-2);
+}
+
+/* Une réponse fait plusieurs milliers de caractères : elle défile dans son
+   propre cadre au lieu d'écraser le fil. */
+.turn-text {
+  max-height: 210px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--chalk);
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.turn-me .turn-text {
+  font-size: 13px;
+  color: var(--chalk);
+}
+
+@media (max-width: 640px) {
+  .turn-text {
+    max-height: 160px;
+    font-size: 11.5px;
+  }
+}

@@ -53,7 +53,7 @@ Tous les parcours passent en preview, assertions au vert bundle et mail compris 
   et **`DECISIONS.md`** (chaque arbitrage et son motif). Une reprise se fait
   en les lisant — pas en refaisant le chemin.
 - Vérificateur : `npm run verify` (avec `BASE_URL` pour viser un
-  déploiement). **77 assertions**, au vert sur la production le 2026-08-01.
+  déploiement). **111 assertions**, au vert sur la production le 2026-08-01.
   Rien ne se déclare sans l'avoir rejoué.
 - Un seul chantier reste ouvert, et il n'appartient pas à l'agent : l'envoi
   du mail de réinitialisation, suspendu à une clé Resend de la main de

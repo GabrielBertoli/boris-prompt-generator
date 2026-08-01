@@ -10,7 +10,9 @@ import {
   DEFAULT_JUDGE,
   DEFAULT_WRITER,
   MODELS,
+  baseConvoFor,
   buildMeta,
+  correctionInstruction,
   costOf,
   countChars,
   formatCost,
@@ -21,6 +23,8 @@ import {
 import { createPortal } from "react-dom";
 import { MAX_ATTEMPTS, runVerifiedGeneration } from "./generate.js";
 import {
+  appendTurn,
+  canRestore,
   downloadText,
   duplicateEntry,
   exportBundle,
@@ -139,6 +143,15 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   const [renameDraft, setRenameDraft] = useState("");
   const [printing, setPrinting] = useState(null); // l'entrée à imprimer
   const [libNote, setLibNote] = useState("");
+  const [stream, setStream] = useState(""); // texte en cours de réception
+  const [elapsed, setElapsed] = useState(0);
+
+  /* Le fil de correction : ce qu'on a demandé, ce qui est sorti. Il vit
+     dans l'entrée de bibliothèque — donc dans le profil de son
+     propriétaire — et `activeId` dit à quelle entrée il appartient. */
+  const [chat, setChat] = useState([]);
+  const [activeId, setActiveId] = useState(null);
+  const [demand, setDemand] = useState("");
 
   const composerRef = useRef(null);
   const resultRef = useRef(null);
@@ -248,9 +261,21 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
 
   const ask = useCallback(
     async (messages, model, maxTokens, role = "writer") => {
-      const { text, usage } = await callClaude(messages, { apiKey, model, maxTokens });
-      addCost(role, costOf(model, usage));
-      return text;
+      setStream("");
+      try {
+        const { text, usage } = await callClaude(messages, {
+          apiKey,
+          model,
+          maxTokens,
+          /* Le texte s'affiche pendant qu'il arrive : une minute d'attente
+             devient lisible au lieu de ressembler à un blocage. */
+          onDelta: setStream,
+        });
+        addCost(role, costOf(model, usage));
+        return text;
+      } finally {
+        setStream("");
+      }
     },
     [apiKey, addCost]
   );
@@ -395,10 +420,17 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     const nextVersion = version + 1;
 
     setAudit(null);
-    setSaveState("idle");
     setError("");
     setPhase("generating");
     pushLog(`Application de l'audit → v${nextVersion}…`);
+
+    /* L'audit entre au fil comme une correction : c'en est une, et le fil
+       doit dire d'où vient chaque version. */
+    const withDemand = appendTurn(chat, {
+      role: "moi",
+      text: `Audit du juge appliqué :\n${corrections}`,
+    });
+    setChat(withDemand);
 
     try {
       const instruction =
@@ -413,6 +445,23 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
       setVerif(res.check);
       setVersion(nextVersion);
       setPhase("done");
+
+      const full = appendTurn(withDemand, {
+        role: "atelier",
+        text: res.text,
+        version: nextVersion,
+        count: res.check.count,
+        pass: res.check.pass,
+      });
+      setChat(full);
+      await persistWork({
+        text: res.text,
+        version: nextVersion,
+        chat: full,
+        count: res.check.count,
+      });
+      setSaveState("saved");
+
       if (!res.check.pass) {
         setError(
           `Le vérificateur n'est pas au vert après ${MAX_ATTEMPTS} tentatives. Le prompt est affiché — corrige à la main ou relance.`
@@ -436,21 +485,166 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     setAudit(null);
     setError("");
     setSaveState("idle");
+    setChat([]);
+    setActiveId(null);
+    setDemand("");
   };
 
   /* ---------- bibliothèque : sauver, modifier, supprimer ---------- */
 
-  const savePrompt = async () => {
-    if (!prompt) return;
+  /* Une seule écriture pour tout ce qui change un prompt en cours : elle
+     crée l'entrée si elle n'existe pas encore, la met à jour sinon, et
+     rend son identifiant. C'est ce qui garantit qu'un fil de correction
+     est TOUJOURS dans le profil, même si personne n'a cliqué
+     « Sauvegarder ». */
+  const persistWork = async ({ text, version: v, chat: thread, count }) => {
+    const now = new Date().toISOString();
+
+    if (activeId && library.some((item) => item.id === activeId)) {
+      await commit(
+        library.map((item) =>
+          item.id === activeId
+            ? { ...item, prompt: text, count, version: v, chat: thread, updatedAt: now }
+            : item
+        )
+      );
+      return activeId;
+    }
+
     const entry = makeEntry({
       idea,
-      prompt,
+      prompt: text,
       limit: settings.charLimit,
-      version,
+      version: v,
+      chat: thread,
     });
     await commit([entry, ...library]);
+    setActiveId(entry.id);
+    return entry.id;
+  };
+
+  const savePrompt = async () => {
+    if (!prompt) return;
+    const id = await persistWork({
+      text: prompt,
+      version,
+      chat,
+      count: countChars(prompt),
+    });
     setSaveState("saved");
-    setOpenId(entry.id);
+    setOpenId(id);
+  };
+
+  /* ---------- le fil : corriger, reprendre, restaurer ---------- */
+
+  const sendCorrection = async () => {
+    const asked = demand.trim();
+    if (!asked || busy || !prompt) return;
+
+    setError("");
+    setDemand("");
+    setAudit(null);
+    const nextVersion = version + 1;
+    const withDemand = appendTurn(chat, { role: "moi", text: asked });
+    setChat(withDemand);
+    setPhase("generating");
+    pushLog(`Correction demandée → v${nextVersion}…`);
+
+    try {
+      /* On repart TOUJOURS du prompt en vigueur, jamais de la conversation
+         accumulée : le modèle voit la méthode, l'idée et le dernier état.
+         C'est borné en coût, et surtout identique avant et après un
+         rechargement — le fil se comporte pareil dans les deux cas. */
+      const base = baseConvoFor({
+        idea: idea + (constraints.trim() ? `\n\nCONTRAINTES IMPOSÉES :\n${constraints.trim()}` : ""),
+        prompt,
+        limit: settings.charLimit,
+      });
+      const res = await generateVerified(base, correctionInstruction(asked, settings.charLimit));
+
+      setHistory(res.convo);
+      setPrompt(res.text);
+      setVerif(res.check);
+      setVersion(nextVersion);
+      setPhase("done");
+
+      const full = appendTurn(withDemand, {
+        role: "atelier",
+        text: res.text,
+        version: nextVersion,
+        count: res.check.count,
+        pass: res.check.pass,
+      });
+      setChat(full);
+      await persistWork({
+        text: res.text,
+        version: nextVersion,
+        chat: full,
+        count: res.check.count,
+      });
+      setSaveState("saved");
+
+      if (!res.check.pass) {
+        setError(
+          `Le vérificateur n'est pas au vert après ${MAX_ATTEMPTS} tentatives. Le prompt est affiché — redemande une correction ou reprends la main.`
+        );
+      }
+    } catch (e) {
+      setError(`La correction a échoué : ${e.message}`);
+      setPhase("done");
+      /* La demande reste dans le fil : elle dit ce qui a été tenté. */
+      setChat(
+        appendTurn(withDemand, {
+          role: "atelier",
+          text: `Échec — ${e.message}`,
+          version,
+          count: countChars(prompt),
+          pass: false,
+        })
+      );
+    }
+  };
+
+  /* Rouvrir un prompt de la bibliothèque dans l'atelier, avec son fil. */
+  const resumeThread = (item) => {
+    setActiveId(item.id);
+    setIdea(item.idea || "");
+    setPrompt(item.prompt);
+    setChat(Array.isArray(item.chat) ? item.chat : []);
+    setVersion(item.version || 1);
+    setVerif(verifyPrompt(item.prompt, item.limit || settings.charLimit));
+    setHistory([]);
+    setQuestions([]);
+    setAnswers({});
+    setAudit(null);
+    setLog([]);
+    setError("");
+    setDemand("");
+    setSaveState("saved");
+    setPhase("done");
+    setRunCost({ writer: 0, judge: 0 });
+    resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  /* Remettre en place une version dont le texte a survécu à la coupe. */
+  const restoreTurn = async (turn) => {
+    if (!canRestore(turn)) return;
+    const nextVersion = version + 1;
+    const count = countChars(turn.text);
+    const full = appendTurn(chat, {
+      role: "atelier",
+      text: turn.text,
+      version: nextVersion,
+      count,
+      pass: verifyPrompt(turn.text, settings.charLimit).pass,
+    });
+    setPrompt(turn.text);
+    setVersion(nextVersion);
+    setVerif(verifyPrompt(turn.text, settings.charLimit));
+    setHistory([]);
+    setChat(full);
+    pushLog(`Version v${turn.version} remise en place → v${nextVersion}.`);
+    await persistWork({ text: turn.text, version: nextVersion, chat: full, count });
   };
 
   const removeEntry = async (id) => {
@@ -563,6 +757,19 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
 
   const busy = phase === "analyzing" || phase === "generating";
   const count = prompt ? countChars(prompt) : 0;
+
+  /* Le temps écoulé s'affiche : c'est ce qui manquait pour distinguer une
+     génération lente d'une génération bloquée. */
+  useEffect(() => {
+    if (!busy && !auditLoading) {
+      setElapsed(0);
+      return;
+    }
+    const started = Date.now();
+    const tick = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(tick);
+  }, [busy, auditLoading]);
+
   const gauge = Math.min(100, Math.round((count / settings.charLimit) * 100));
 
   const shown = useMemo(() => {
@@ -795,6 +1002,17 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
               </div>
             )}
 
+            {(busy || auditLoading) && (
+              <div className="mono mt-3 text-[11.5px]" style={{ color: "var(--muted-2)" }}>
+                › {elapsed} s écoulées
+                {stream ? ` · ${countChars(stream)} caractères reçus` : " · en attente du modèle…"}
+              </div>
+            )}
+
+            {/* Le texte pendant qu'il arrive. Sans lui, une réponse d'une
+                minute était indiscernable d'un blocage. */}
+            {busy && stream && <pre className="prompt-sheet mt-4">{stream}</pre>}
+
             {phase === "done" && prompt && (
               <>
                 <pre className="prompt-sheet mt-6">{prompt}</pre>
@@ -886,6 +1104,81 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
                     Appliquer l'audit → v{version + 1}
                   </button>
                 )}
+              </div>
+            )}
+
+            {/* ---- le fil de correction ----
+                Chaque génération a le sien. Il est enregistré dans l'entrée
+                de bibliothèque, donc dans le profil de son propriétaire, et
+                le suit d'un appareil à l'autre. */}
+            {prompt && (
+              <div className="thread mt-7">
+                <div className="section-head mb-4">
+                  <span className="section-title">Fil de correction</span>
+                  <span className="section-line" />
+                  <span className="tag tag-accent">v{version}</span>
+                </div>
+
+                {chat.length === 0 ? (
+                  <p className="lede mb-4 text-[14.5px]">
+                    Dis ce qu'il faut changer, en français : l'atelier régénère le prompt entier,
+                    le mesure, et garde la trace. Tout le fil est enregistré chez toi.
+                  </p>
+                ) : (
+                  <div className="mb-4">
+                    {chat.map((turn, i) => (
+                      <div key={i} className={turn.role === "moi" ? "turn turn-me" : "turn turn-shop"}>
+                        <div className="turn-head">
+                          <span>{turn.role === "moi" ? "Toi" : "Atelier"}</span>
+                          {turn.version ? <span className="tag">v{turn.version}</span> : null}
+                          {turn.count != null ? (
+                            <span className={turn.pass === false ? "tag tag-ko" : "tag"}>
+                              {turn.count} car.
+                            </span>
+                          ) : null}
+                          <span>{formatDate(turn.at)}</span>
+                        </div>
+                        <pre className="turn-text">{turn.text}</pre>
+                        {canRestore(turn) && turn.text !== prompt && (
+                          <button
+                            className="btn btn-quiet mt-2"
+                            type="button"
+                            onClick={() => restoreTurn(turn)}
+                            disabled={busy}
+                          >
+                            Remettre cette version
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <textarea
+                  rows={3}
+                  value={demand}
+                  onChange={(e) => setDemand(e.target.value)}
+                  placeholder="Ex. : durcis l'escalade, cite le nom du dépôt dans TON PRODUIT, allège la VÉRIFICATION…"
+                  /* Entrée+Cmd (ou Ctrl) envoie : la touche Entrée seule doit
+                     rester libre, une consigne tient souvent en trois lignes. */
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendCorrection();
+                  }}
+                />
+
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={sendCorrection}
+                    disabled={busy || !demand.trim()}
+                  >
+                    {busy ? "En cours…" : `Corriger → v${version + 1}`}
+                  </button>
+                  <span className="mono text-[11px]" style={{ color: "var(--muted-2)" }}>
+                    ⌘/Ctrl + Entrée
+                  </span>
+                </div>
               </div>
             )}
           </section>
@@ -1017,6 +1310,10 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
                     </button>
                     <button className="btn btn-quiet" type="button" onClick={() => openEditor(item)}>
                       Modifier
+                    </button>
+                    <button className="btn btn-quiet" type="button" onClick={() => resumeThread(item)}>
+                      Reprendre le fil
+                      {item.chat?.length ? ` (${item.chat.filter((t) => t.role === "moi").length})` : ""}
                     </button>
                     <button className="btn btn-quiet" type="button" onClick={() => startRename(item)}>
                       Renommer
