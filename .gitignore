@@ -1,0 +1,16 @@
+# Dépôts déclarés comme sources et rapatriés par la tour :
+# ils appartiennent à leurs auteurs, pas à ce projet.
+Github repo/
+
+node_modules/
+dist/
+.omc/
+.vercel
+.vercel/
+
+# Secrets : jamais commités (clé de test, variables tirées de Vercel).
+# L'exception vient APRÈS la règle large, sinon elle ne s'applique pas.
+.env
+.env.*
+.env*
+!.env.example
