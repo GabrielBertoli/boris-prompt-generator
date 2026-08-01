@@ -433,7 +433,11 @@ const CARTE_SONDE = {
   id: "sonde-verif",
   title: "Une conciergerie de copropriétés pilotée par des agents autonomes",
   idea: "une conciergerie de copropriétés pilotée par des agents",
-  prompt: "# QUI TU ES\nsonde\n# SORTIE\nSinon tu continues.",
+  /* Le dernier tour de l'atelier porte EXACTEMENT le prompt de l'entrée :
+     c'est l'état réel après une correction, et c'est celui qui affichait le
+     prompt deux fois — une fois dans la feuille, une fois dans le fil. Le
+     jeton ci-dessous permet de compter où il apparaît. */
+  prompt: "# QUI TU ES\nsonde JETONPROMPT\n# SORTIE\nSinon tu continues.",
   count: 52,
   limit: 3900,
   version: 2,
@@ -441,10 +445,10 @@ const CARTE_SONDE = {
     { role: "moi", text: "durcis l'escalade", at: "2026-08-01T10:00:00.000Z" },
     {
       role: "atelier",
-      text: "# QUI TU ES\nsonde corrigée\n# SORTIE\nSinon tu continues.",
+      text: "# QUI TU ES\nsonde JETONPROMPT\n# SORTIE\nSinon tu continues.",
       at: "2026-08-01T10:00:30.000Z",
       version: 2,
-      count: 58,
+      count: 52,
       pass: true,
     },
   ],
@@ -531,6 +535,9 @@ const SURFACES = [
               saisie: Boolean(fil && fil.querySelector("textarea")),
               cassetins: document.querySelectorAll(".cassetin").length,
               gestes: Boolean(document.querySelector(".cassetin-acts")),
+              feuilles: [...document.querySelectorAll(".prompt-sheet")]
+                .filter((el) => el.textContent.includes("JETONPROMPT")).length,
+              filRepete: Boolean(fil && fil.textContent.includes("JETONPROMPT")),
             });
             document.body.appendChild(out);
           }, 400);
@@ -554,6 +561,11 @@ const SURFACES = [
       assert("les tours du fil sont affichés", r.tours === 2, `${r.tours} tour(s)`);
       assert("la demande enregistrée est relue", r.demande);
       assert("la zone de correction est là", r.saisie);
+
+      /* Le prompt s'affiche UNE fois. Le dernier tour du fil porte le même
+         texte que la feuille : le répéter le montrait deux fois. */
+      assert("le prompt n'est affiché qu'une fois", r.feuilles === 1, `${r.feuilles} feuille(s)`);
+      assert("le fil ne répète pas la version en cours", !r.filRepete);
 
       /* Mesure supplémentaire, tiroir ouvert : c'est l'état où un panneau
          de 340 px peut déborder un écran de 320. */

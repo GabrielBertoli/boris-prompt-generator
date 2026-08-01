@@ -1414,3 +1414,12 @@ pre {
     display: none !important;
   }
 }
+
+/* Le tour dont le texte est déjà la feuille du dessus : on ne le répète
+   pas, on le signale. */
+.turn-courant {
+  margin: 0;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--signal);
+}

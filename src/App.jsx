@@ -1200,31 +1200,49 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
                   </p>
                 ) : (
                   <div className="mb-4">
-                    {chat.map((turn, i) => (
-                      <div key={i} className={turn.role === "moi" ? "turn turn-me" : "turn turn-shop"}>
-                        <div className="turn-head">
-                          <span>{turn.role === "moi" ? "Toi" : "Atelier"}</span>
-                          {turn.version ? <span className="tag">v{turn.version}</span> : null}
-                          {turn.count != null ? (
-                            <span className={turn.pass === false ? "tag tag-ko" : "tag"}>
-                              {turn.count} car.
-                            </span>
-                          ) : null}
-                          <span>{formatDate(turn.at)}</span>
+                    {chat.map((turn, i) => {
+                      /* Le dernier tour de l'atelier EST le prompt affiché
+                         plus haut : le réécrire ici le montrerait deux fois.
+                         On n'en garde que la ligne d'état, qui renvoie à la
+                         feuille. */
+                      const courant = turn.role === "atelier" && turn.text === prompt;
+                      return (
+                        <div
+                          key={i}
+                          className={turn.role === "moi" ? "turn turn-me" : "turn turn-shop"}
+                        >
+                          <div className="turn-head">
+                            <span>{turn.role === "moi" ? "Toi" : "Atelier"}</span>
+                            {turn.version ? <span className="tag">v{turn.version}</span> : null}
+                            {turn.count != null ? (
+                              <span className={turn.pass === false ? "tag tag-ko" : "tag"}>
+                                {turn.count} car.
+                              </span>
+                            ) : null}
+                            <span>{formatDate(turn.at)}</span>
+                          </div>
+
+                          {courant ? (
+                            <p className="turn-courant mono">
+                              Version en cours — c'est le prompt affiché ci-dessus.
+                            </p>
+                          ) : (
+                            <pre className="turn-text">{turn.text}</pre>
+                          )}
+
+                          {canRestore(turn) && !courant && (
+                            <button
+                              className="btn btn-quiet mt-2"
+                              type="button"
+                              onClick={() => restoreTurn(turn)}
+                              disabled={busy}
+                            >
+                              Remettre cette version
+                            </button>
+                          )}
                         </div>
-                        <pre className="turn-text">{turn.text}</pre>
-                        {canRestore(turn) && turn.text !== prompt && (
-                          <button
-                            className="btn btn-quiet mt-2"
-                            type="button"
-                            onClick={() => restoreTurn(turn)}
-                            disabled={busy}
-                          >
-                            Remettre cette version
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
