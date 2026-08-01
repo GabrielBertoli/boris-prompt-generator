@@ -94,7 +94,7 @@ if (!BASE) {
   assert("anonyme = non authentifié", anon.body?.authenticated === false);
   /* La liste attendue est nommée, pas comptée : ajouter quelqu'un et
      oublier de le semer ne doit pas passer inaperçu. */
-  const EXPECTED = ["Gabriel", "Karl", "Raphaëlle", "Gabriela"];
+  const EXPECTED = ["Gabriel", "Karl", "Raphaëlle", "Gabriela", "Cécile"];
   const served = (anon.body?.users || []).map((u) => u.name);
   assert(
     "les prénoms attendus sont proposés",
@@ -302,7 +302,6 @@ if (!ANTHROPIC) {
       role: "user",
       content:
         buildMeta(limit) +
-        "MODE : créer le produit fondateur d'une NOUVELLE start-up. L'agent part de zéro." +
         "\n\nIDÉE :\nune conciergerie de copropriétés pilotée par des agents",
     },
   ];

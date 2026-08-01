@@ -14,6 +14,7 @@ const FALLBACK = [
   { id: "karl", name: "Karl", initial: "K" },
   { id: "raphaelle", name: "Raphaëlle", initial: "R" },
   { id: "gabriela", name: "Gabriela", initial: "G" },
+  { id: "cecile", name: "Cécile", initial: "C" },
 ];
 
 export default function Gate({ users, reset, degraded, onClearReset, onEnter }) {

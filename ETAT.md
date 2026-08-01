@@ -14,7 +14,7 @@ sur tout ce qui ne dépend pas des deux fournisseurs.
 
 | Parcours | État | Preuve |
 |---|---|---|
-| Prénom choisi | ✅ | quatre prénoms servis par `/api/session` |
+| Prénom choisi | ✅ | cinq prénoms servis par `/api/session` |
 | Mauvais code refusé | ✅ | 401, aucun cookie posé |
 | Bon code retenu | ✅ | 200, cookie `HttpOnly` + `Secure` |
 | Code changé | ✅ | aller-retour `2000G` → provisoire → `2000G` |
@@ -32,7 +32,8 @@ Production : `https://boris-prompt-generator.vercel.app` (alias stable).
 Dernière preview : `https://boris-prompt-generator-3alg21uey-coe-startup.vercel.app`
 
 Comptes en place : Gabriel `1966G`, Karl `1994K`, Raphaëlle `2000R`,
-Gabriela `2000G` — les quatre vérifiés, bon code accepté et mauvais refusé.
+Gabriela `2000G`, Cécile `1998C` — les cinq vérifiés en production, bon
+code accepté et mauvais refusé.
 Aucun mail enregistré : c'est à chacun de poser le sien depuis Réglages.
 
 Ajouter quelqu'un = trois endroits, plus la graine :
@@ -166,3 +167,15 @@ Trois refus à ne pas confondre, tous vérifiés en production :
 
 Un `429` pendant une mise au point n'est pas une panne : c'est le compteur
 du vérificateur qui s'ajoute aux essais manuels sur le même compte.
+
+**Le sélecteur de mode a été retiré** (décision de Gabriel, 2026-08-01) :
+plus de « Nouvelle start-up / Produit dans une start-up existante », ni de
+bandeau « 01 · L'idée ». L'idée dit d'elle-même si l'agent part de zéro ou
+s'intègre à un terrain existant — le méta-prompt n'impose plus de MODE.
+Le champ `mode` reste toléré dans les données pour les entrées déjà
+sauvegardées ; les nouvelles portent la valeur par défaut.
+
+**La grille des prénoms tient à n'importe quel effectif.** Paliers 1, 2, 3,
+5 colonnes, et une règle structurelle (`:last-child:nth-child(…)`) étale la
+carte qui resterait seule sur sa ligne. Mesuré à cinq : 2×2 + Cécile en
+pleine largeur (299/299/611 px).

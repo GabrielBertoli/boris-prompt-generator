@@ -87,7 +87,6 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   }, [settings]);
 
   /* ---------- atelier ---------- */
-  const [mode, setMode] = useState("nouvelle");
   const [idea, setIdea] = useState("");
   const [constraints, setConstraints] = useState("");
   const [showConstraints, setShowConstraints] = useState(false);
@@ -196,16 +195,13 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     setSaveState("idle");
     setPhase("analyzing");
 
-    const modeLine =
-      mode === "nouvelle"
-        ? "MODE : créer le produit fondateur d'une NOUVELLE start-up. L'agent part de zéro."
-        : "MODE : ajouter un produit à une start-up EXISTANTE. Le terrain existant (systèmes, données, clients) est une contrainte du produit : l'agent s'y intègre sans le casser.";
-
+    /* Plus de mode déclaré : l'idée dit d'elle-même si l'agent part de zéro
+       ou s'intègre à un terrain existant. Imposer « nouvelle start-up » par
+       défaut aurait mal cadré toutes les idées du second type. */
     const first = {
       role: "user",
       content:
         buildMeta(settings.charLimit) +
-        modeLine +
         "\n\nIDÉE :\n" +
         idea.trim() +
         (constraints.trim() ? "\n\nCONTRAINTES IMPOSÉES :\n" + constraints.trim() : "") +
@@ -352,7 +348,6 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     if (!prompt) return;
     const entry = makeEntry({
       idea,
-      mode,
       prompt,
       limit: settings.charLimit,
       version,
@@ -395,7 +390,6 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
 
   const reuse = (item) => {
     setIdea(item.idea || "");
-    setMode(item.mode || "nouvelle");
     reset();
     composerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -484,33 +478,8 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           </div>
         </section>
 
-        {/* ================= 01 · l'idée ================= */}
+        {/* ================= l'idée ================= */}
         <section ref={composerRef} className="card p-6 sm:p-7">
-          <div className="section-head">
-            <span className="section-num">01</span>
-            <span className="section-title">L'idée</span>
-            <span className="section-line" />
-          </div>
-
-          <div className="seg mb-5 grid-cols-1 sm:grid-cols-2">
-            <button
-              type="button"
-              className={mode === "nouvelle" ? "on" : ""}
-              onClick={() => setMode("nouvelle")}
-              disabled={busy}
-            >
-              Nouvelle start-up
-            </button>
-            <button
-              type="button"
-              className={mode === "existante" ? "on" : ""}
-              onClick={() => setMode("existante")}
-              disabled={busy}
-            >
-              Produit dans une start-up existante
-            </button>
-          </div>
-
           <textarea
             rows={6}
             value={idea}
@@ -559,11 +528,11 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           {error && <p className="note note-error mt-5">{error}</p>}
         </section>
 
-        {/* ================= 02 · questions ================= */}
+        {/* ================= 01 · questions ================= */}
         {phase === "questions" && (
           <section className="card rise mt-6 p-6 sm:p-7">
             <div className="section-head">
-              <span className="section-num">02</span>
+              <span className="section-num">01</span>
               <span className="section-title">Questions matérielles</span>
               <span className="section-line" />
             </div>
@@ -600,14 +569,14 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           </section>
         )}
 
-        {/* ================= 03 · vérificateur ================= */}
+        {/* ================= 02 · vérificateur ================= */}
         {(phase === "generating" || phase === "done") && (
           <section
             ref={resultRef}
             className={`card rise mt-6 p-6 sm:p-7 ${phase === "generating" ? "working" : ""}`}
           >
             <div className="section-head">
-              <span className="section-num">03</span>
+              <span className="section-num">02</span>
               <span className="section-title">Vérificateur</span>
               <span className="section-line" />
               <span className="tag tag-accent">v{version}</span>
@@ -728,10 +697,10 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           </section>
         )}
 
-        {/* ================= 04 · bibliothèque ================= */}
+        {/* ================= 03 · bibliothèque ================= */}
         <section className="card mt-6 p-6 sm:p-7">
           <div className="section-head">
-            <span className="section-num">04</span>
+            <span className="section-num">03</span>
             <span className="section-title">Ta bibliothèque</span>
             <span className="section-line" />
             <span className="tag">{library.length}</span>

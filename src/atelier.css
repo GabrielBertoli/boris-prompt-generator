@@ -453,9 +453,12 @@ select:disabled {
 
 /* ---------- portail ---------- */
 
-/* Roster de quatre : `auto-fit` tombait sur trois colonnes autour de
-   700 px et laissait le quatrième prénom orphelin sur sa ligne. Paliers
-   explicites — 1, puis 2, puis 4 — jamais d'orphelin. */
+/* Paliers explicites plutôt qu'`auto-fit` : celui-ci tombait sur trois
+   colonnes vers 700 px et laissait un prénom seul sur sa ligne.
+   1 → 2 → 3 → 5 colonnes. Un effectif impair laisse forcément une ligne
+   incomplète ; la seule qui choque est celle d'UNE carte isolée, alors
+   on l'étale sur toute la largeur. La règle est portée par un sélecteur
+   structurel — elle tient quel que soit le nombre d'inscrits. */
 .gate-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -466,11 +469,33 @@ select:disabled {
   .gate-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+  .gate-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
 }
 
-@media (min-width: 1080px) {
+@media (min-width: 780px) {
   .gate-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .gate-card:last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+  .gate-card:last-child:nth-child(3n + 1) {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1180px) {
+  .gate-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+  .gate-card:last-child:nth-child(odd),
+  .gate-card:last-child:nth-child(3n + 1) {
+    grid-column: auto;
+  }
+  .gate-card:last-child:nth-child(5n + 1) {
+    grid-column: 1 / -1;
   }
 }
 

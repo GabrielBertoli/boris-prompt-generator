@@ -14,6 +14,7 @@ export const USERS = [
   { id: "karl", name: "Karl", initial: "K" },
   { id: "raphaelle", name: "Raphaëlle", initial: "R" },
   { id: "gabriela", name: "Gabriela", initial: "G" },
+  { id: "cecile", name: "Cécile", initial: "C" },
 ];
 
 export const userById = (id) => USERS.find((u) => u.id === id) || null;

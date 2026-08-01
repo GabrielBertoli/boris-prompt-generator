@@ -23,7 +23,7 @@ if (!URL_ || !TOKEN) {
   process.exit(1);
 }
 
-const KNOWN = ["gabriel", "karl", "raphaelle", "gabriela"];
+const KNOWN = ["gabriel", "karl", "raphaelle", "gabriela", "cecile"];
 const pairs = process.argv.slice(2).map((arg) => {
   const index = arg.indexOf("=");
   return [arg.slice(0, index), arg.slice(index + 1)];
