@@ -19,7 +19,7 @@ sur tout ce qui ne dépend pas des deux fournisseurs.
 | Bon code retenu | ✅ | 200, cookie `HttpOnly` + `Secure` |
 | Code changé | ✅ | aller-retour `2000G` → provisoire → `2000G` |
 | Code oublié → mail | ⛔ **décidé** | pas d'envoi pour l'instant (voir ci-dessous) |
-| Réglages | ✅ | clé, modèles, limite — navigateur |
+| Réglages | ✅ | clé, modèles, limite (défaut 3900) — navigateur |
 | Clé de l'atelier | ✅ | servie à la session, refusée au portail, absente du bundle |
 | Idée sans question | ✅ | analyse renvoie `{"questions":[]}` → génère |
 | Idée ambiguë | ✅ | jusqu'à 3 questions matérielles |
@@ -179,3 +179,19 @@ sauvegardées ; les nouvelles portent la valeur par défaut.
 5 colonnes, et une règle structurelle (`:last-child:nth-child(…)`) étale la
 carte qui resterait seule sur sa ligne. Mesuré à cinq : 2×2 + Cécile en
 pleine largeur (299/299/611 px).
+
+**Limite par défaut portée à 3900** (demande de Gabriel, 2026-08-01). La
+fenêtre de visée n'est plus un texte figé : `targetWindow(limit)` donne
+73–90 % de la limite (2200–2700 à 3000, 2850–3500 à 3900) et sert au
+méta-prompt, aux instructions d'étape et au vérificateur. Un réglage 3000
+déjà en localStorage est migré (c'était le défaut, jamais choisi). Effet
+mesuré : à 3900, le premier jet passe sans réparation.
+
+**Compteur de dépense par personne.** Le navigateur mesure (jetons ×
+tarif catalogue, `PRICES` dans `src/meta.js`), le serveur additionne :
+`/api/usage` (GET/POST, session obligatoire, INCRBYFLOAT atomique, delta
+plafonné à 5 $, clé `bpg:user:<id>:usage`). Affiché en continu : puces
+« prompt » / « juge » dans le vérificateur, « total à date » aussi dans le
+bandeau. Double local par utilisateur si la clé-valeur tombe. C'est un
+ordre de grandeur honnête, pas une facture — remises et cache non
+modélisés.

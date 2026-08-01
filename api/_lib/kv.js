@@ -61,6 +61,10 @@ export const kv = {
     if (count === 1) await command(["EXPIRE", key, seconds]);
     return count;
   },
+  /* Atomique : deux onglets qui génèrent en même temps ne se perdent pas. */
+  async incrByFloat(key, delta) {
+    return Number(await command(["INCRBYFLOAT", key, delta]));
+  },
   async getJson(key, fallback) {
     const raw = await this.get(key);
     if (raw === null) return fallback;

@@ -100,7 +100,7 @@ export async function callClaude(messages, { apiKey, model, maxTokens = 4000, sy
     throw new Error("Réponse vide du modèle.");
   }
 
-  return { text, truncated: data.stop_reason === "max_tokens" };
+  return { text, truncated: data.stop_reason === "max_tokens", usage: data.usage || null };
 }
 
 function describe(status, detail) {
@@ -152,4 +152,6 @@ export const api = {
     callApi("/api/reset", { method: "POST", payload: { action: "confirm", id, token, code } }),
   loadPrompts: () => callApi("/api/prompts"),
   savePrompts: (items) => callApi("/api/prompts", { method: "PUT", payload: { items } }),
+  loadUsage: () => callApi("/api/usage"),
+  addUsage: (delta) => callApi("/api/usage", { method: "POST", payload: { delta } }),
 };

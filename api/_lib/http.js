@@ -23,6 +23,7 @@ export const keys = {
   code: (id) => `bpg:user:${id}:code`,
   email: (id) => `bpg:user:${id}:email`,
   prompts: (id) => `bpg:user:${id}:prompts`,
+  usage: (id) => `bpg:user:${id}:usage`,
   reset: (fp) => `bpg:reset:${fp}`,
   rate: (bucket) => `bpg:rl:${bucket}`,
 };

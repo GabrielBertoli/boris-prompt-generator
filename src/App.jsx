@@ -11,8 +11,11 @@ import {
   DEFAULT_WRITER,
   MODELS,
   buildMeta,
+  costOf,
   countChars,
+  formatCost,
   parseJson,
+  targetWindow,
   verifyPrompt,
 } from "./meta.js";
 import { MAX_ATTEMPTS, runVerifiedGeneration } from "./generate.js";
@@ -29,7 +32,7 @@ const SETTINGS_KEY = "atelier-boris:reglages";
 const DEFAULTS = {
   writer: DEFAULT_WRITER,
   judge: DEFAULT_JUDGE,
-  charLimit: 3000,
+  charLimit: 3900,
 };
 
 function loadSettings() {
@@ -37,11 +40,14 @@ function loadSettings() {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return DEFAULTS;
     const parsed = JSON.parse(raw);
+    /* 3000 était l'ancien défaut, que personne n'avait touché : on le
+       migre vers 3900. Une valeur choisie à la main est conservée. */
+    const stored = parsed.charLimit === 3000 ? DEFAULTS.charLimit : parsed.charLimit;
     return {
       writer: MODELS.some((m) => m.id === parsed.writer) ? parsed.writer : DEFAULTS.writer,
       judge: MODELS.some((m) => m.id === parsed.judge) ? parsed.judge : DEFAULTS.judge,
-      charLimit: Number.isFinite(parsed.charLimit)
-        ? Math.min(8000, Math.max(1500, parsed.charLimit))
+      charLimit: Number.isFinite(stored)
+        ? Math.min(8000, Math.max(1500, stored))
         : DEFAULTS.charLimit,
     };
   } catch {
@@ -154,12 +160,79 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     [user.id]
   );
 
+  /* ---------- compteur de dépense ----------
+     Le navigateur est le seul à voir les réponses d'Anthropic : c'est donc
+     lui qui mesure (jetons × tarif), et le serveur qui additionne — le
+     total à date suit son propriétaire d'un appareil à l'autre. Un double
+     local prend le relais si la clé-valeur est injoignable. */
+  const [runCost, setRunCost] = useState({ writer: 0, judge: 0 });
+  const [totalCost, setTotalCost] = useState(null);
+
+  const costKey = `atelier-boris:cout:${user.id}`;
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      let local = 0;
+      try {
+        local = Number(localStorage.getItem(costKey)) || 0;
+      } catch {
+        /* navigation privée */
+      }
+      if (alive) setTotalCost(local);
+      try {
+        const { total } = await api.loadUsage();
+        if (alive) {
+          setTotalCost(total);
+          try {
+            localStorage.setItem(costKey, String(total));
+          } catch {
+            /* le serveur reste la référence */
+          }
+        }
+      } catch {
+        /* hors ligne : le double local fait foi en attendant */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [costKey]);
+
+  const addCost = useCallback(
+    (role, dollars) => {
+      if (!(dollars > 0)) return;
+      setRunCost((c) => ({ ...c, [role]: c[role] + dollars }));
+      setTotalCost((t) => (t ?? 0) + dollars);
+      try {
+        localStorage.setItem(costKey, String((Number(localStorage.getItem(costKey)) || 0) + dollars));
+      } catch {
+        /* navigation privée */
+      }
+      api
+        .addUsage(dollars)
+        .then(({ total }) => {
+          setTotalCost(total);
+          try {
+            localStorage.setItem(costKey, String(total));
+          } catch {
+            /* le serveur reste la référence */
+          }
+        })
+        .catch(() => {
+          /* hors ligne : le delta est déjà dans le double local */
+        });
+    },
+    [costKey]
+  );
+
   const ask = useCallback(
-    async (messages, model, maxTokens) => {
-      const { text } = await callClaude(messages, { apiKey, model, maxTokens });
+    async (messages, model, maxTokens, role = "writer") => {
+      const { text, usage } = await callClaude(messages, { apiKey, model, maxTokens });
+      addCost(role, costOf(model, usage));
       return text;
     },
-    [apiKey]
+    [apiKey, addCost]
   );
 
   /* ---------- cœur : génération sous assertions ---------- */
@@ -193,6 +266,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     setLog([]);
     setVersion(1);
     setSaveState("idle");
+    setRunCost({ writer: 0, judge: 0 });
     setPhase("analyzing");
 
     /* Plus de mode déclaré : l'idée dit d'elle-même si l'agent part de zéro
@@ -238,7 +312,8 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
 
     let instruction =
       "ÉTAPE 2 — Génère MAINTENANT le system prompt final. Texte brut uniquement : pas de backticks, pas de commentaire, pas de préambule. " +
-      `Huit sections '# EN MAJUSCULES', moins de ${settings.charLimit} caractères, vise 2200 à 2700.`;
+      `Huit sections '# EN MAJUSCULES', moins de ${settings.charLimit} caractères, ` +
+      `vise ${targetWindow(settings.charLimit).lo} à ${targetWindow(settings.charLimit).hi}.`;
 
     if (answersMap) {
       const lines = questions
@@ -285,7 +360,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
         },
       ];
       // Le juge n'est jamais le modèle qui a produit : angles morts corrélés.
-      const raw = await ask(convo, settings.judge, 1600);
+      const raw = await ask(convo, settings.judge, 1600, "judge");
       setAudit(parseJson(raw));
     } catch (e) {
       setAudit({ verdict: `L'audit a échoué : ${e.message}`, failles: [], hypotheses: [] });
@@ -310,7 +385,8 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
         "ÉTAPE 4 — Applique chacune de ces corrections au prompt ci-dessus :\n" +
         corrections +
         "\nRégénère le prompt COMPLET corrigé (les huit sections jusqu'à # SORTIE incluse), texte brut uniquement, " +
-        `sans backticks ni commentaire, moins de ${settings.charLimit} caractères, vise 2200 à 2700.`;
+        `sans backticks ni commentaire, moins de ${settings.charLimit} caractères, ` +
+        `vise ${targetWindow(settings.charLimit).lo} à ${targetWindow(settings.charLimit).hi}.`;
       const res = await generateVerified(history, instruction);
       setHistory(res.convo);
       setPrompt(res.text);
@@ -474,6 +550,9 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
             <span className={apiKey ? "tag tag-ok" : "tag tag-ko"}>
               {usingShared ? "clé de l'atelier" : apiKey ? "ta clé" : "clé manquante"}
             </span>
+            <span className="tag" title="Dépense API cumulée de ton compte, tous appareils confondus">
+              dépense à date {formatCost(totalCost ?? 0)}
+            </span>
             {!libRemote && <span className="tag tag-ko">hors ligne</span>}
           </div>
         </section>
@@ -608,6 +687,15 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
             <div className="gauge mt-5">
               <span style={{ width: `${gauge}%`, background: tone }} />
               <span className="gauge-ticks" />
+            </div>
+
+            {/* Le compteur vit : il bouge à chaque appel, pendant la
+                génération comme à l'audit. Prompt = tous les appels du
+                modèle qui produit ; juge = ceux de l'audit. */}
+            <div className="mono mt-4 flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="tag">prompt {formatCost(runCost.writer)}</span>
+              <span className="tag">juge {formatCost(runCost.judge)}</span>
+              <span className="tag tag-accent">total à date {formatCost(totalCost ?? 0)}</span>
             </div>
 
             {log.length > 0 && (

@@ -35,6 +35,15 @@ Production, secrets réels, envoi externe réel, mouvement d'argent, suppression
 # SORTIE
 Le mois complet s'écoule, assertions au vert, sans intervention hors file de validation, et la file ne contient que des actions engageantes. Sinon tu continues.`;
 
+/* Fenêtre de visée dérivée de la limite (73 % à 90 %, arrondie aux 50) :
+   à 3000 elle redonne le « vise 2200 à 2700 » d'origine, à 3900 elle
+   devient 2850–3500. Une seule source, partagée par le méta-prompt, les
+   instructions d'étape et le vérificateur. */
+export function targetWindow(limit) {
+  const step = (n) => Math.round(n / 50) * 50;
+  return { lo: step(limit * 0.7333), hi: step(limit * 0.9) };
+}
+
 export function buildMeta(limit) {
   return (
     "Tu es un générateur de system prompts agentiques selon la méthode Boris (créateur de Claude Code). " +
@@ -51,7 +60,7 @@ export function buildMeta(limit) {
     "RÈGLES : le prompt contient le but, les garde-fous, le vérificateur, les critères de sortie — rien d'autre. Aucune correction comportementale (ne t'arrête pas, change d'approche, journalise en détail, topologie de fan-out) : natives sur les modèles actuels. " +
     "LIMITE STRICTE : moins de " +
     limit +
-    " caractères. Vise 2200 à 2700.\n\n" +
+    ` caractères. Vise ${targetWindow(limit).lo} à ${targetWindow(limit).hi}.\n\n` +
     "EXEMPLE DE RÉFÉRENCE (structure, style et densité à reproduire, adaptés au nouveau domaine) :\n---\n" +
     PROMPT_REFERENCE +
     "\n---\n"
@@ -92,6 +101,35 @@ export const MODELS = [
   { id: "claude-fable-5", label: "Fable 5", note: "le plus fort, le plus cher" },
   { id: "claude-haiku-4-5", label: "Haiku 4.5", note: "économique" },
 ];
+
+/* Tarifs Anthropic en $ par million de jetons (entrée / sortie),
+   prix catalogue au 2026-08. Le compteur est un ordre de grandeur
+   honnête, pas une facture : les remises de lancement et le cache
+   ne sont pas modélisés. */
+export const PRICES = {
+  "claude-sonnet-5": { in: 3, out: 15 },
+  "claude-opus-5": { in: 5, out: 25 },
+  "claude-fable-5": { in: 10, out: 50 },
+  "claude-haiku-4-5": { in: 1, out: 5 },
+};
+
+export function costOf(model, usage) {
+  const price = PRICES[model];
+  if (!price || !usage) return 0;
+  const input = (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0);
+  const cached = usage.cache_read_input_tokens || 0;
+  return (
+    (input * price.in + cached * price.in * 0.1 + (usage.output_tokens || 0) * price.out) / 1e6
+  );
+}
+
+/* 0,043 $ · <0,001 $ · 1,20 $ — virgule française, dollar facturé. */
+export function formatCost(dollars) {
+  if (!Number.isFinite(dollars) || dollars <= 0) return "0 $";
+  if (dollars < 0.001) return "<0,001 $";
+  const digits = dollars < 1 ? 3 : 2;
+  return dollars.toFixed(digits).replace(".", ",") + " $";
+}
 
 export const DEFAULT_WRITER = "claude-sonnet-5";
 export const DEFAULT_JUDGE = "claude-opus-5";

@@ -170,6 +170,20 @@ if (!BASE) {
       `${(after.body?.items || []).length} entrées restantes`
     );
 
+    /* compteur de dépense : lire, créditer, relire */
+    const usage0 = await call("/api/usage");
+    assert("GET /api/usage répond 200", usage0.status === 200, `reçu ${usage0.status}`);
+    const before0 = Number(usage0.body?.total) || 0;
+    const credited = await call("/api/usage", "POST", { delta: 0.000123 });
+    assert("POST /api/usage accepté", credited.status === 200, `reçu ${credited.status}`);
+    const usage1 = await call("/api/usage");
+    const grew = Number(usage1.body?.total) - before0;
+    assert("total incrémenté du delta", Math.abs(grew - 0.000123) < 1e-9, `+${grew.toFixed(6)} $`);
+    const bad = await call("/api/usage", "POST", { delta: 999 });
+    assert("delta absurde refusé", bad.status === 400, `reçu ${bad.status}`);
+    const nakedUsage = await callRaw("/api/usage");
+    assert("compteur fermé sans session", nakedUsage.status === 401, `reçu ${nakedUsage.status}`);
+
     /* cloisonnement : sans cookie, rien */
     const naked = await callRaw("/api/prompts");
     assert("bibliothèque fermée sans session", naked.status === 401, `reçu ${naked.status}`);
@@ -293,8 +307,8 @@ section("Générateur (appel direct Anthropic)");
 if (!ANTHROPIC) {
   console.log("… ignoré : ANTHROPIC_TEST_KEY non fourni.");
 } else {
-  const limit = 3000;
-  const { buildMeta } = await import("../src/meta.js");
+  const limit = 3900;
+  const { buildMeta, targetWindow } = await import("../src/meta.js");
   const { runVerifiedGeneration } = await import("../src/generate.js");
 
   const base = [
@@ -340,7 +354,7 @@ if (!ANTHROPIC) {
     instruction:
       "ÉTAPE 2 — Génère MAINTENANT le system prompt final. Texte brut uniquement : pas de backticks, " +
       "pas de commentaire, pas de préambule. Huit sections '# EN MAJUSCULES', " +
-      `moins de ${limit} caractères, vise 2200 à 2700.`,
+      `moins de ${limit} caractères, vise ${targetWindow(limit).lo} à ${targetWindow(limit).hi}.`,
     limit,
     onLog: (line) => console.log(`   · ${line}`),
   }).catch((error) => {
