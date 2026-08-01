@@ -18,8 +18,22 @@ import {
   targetWindow,
   verifyPrompt,
 } from "./meta.js";
+import { createPortal } from "react-dom";
 import { MAX_ATTEMPTS, runVerifiedGeneration } from "./generate.js";
-import { formatDate, loadLibrary, makeEntry, persistLibrary } from "./library.js";
+import {
+  downloadText,
+  duplicateEntry,
+  exportBundle,
+  formatDate,
+  loadLibrary,
+  makeEntry,
+  mergeLibraries,
+  parseBundle,
+  persistLibrary,
+  renameEntry,
+  slugify,
+  toMarkdown,
+} from "./library.js";
 
 /* ================================================================
    ATELIER — générateur de prompts agentiques, méthode Boris.
@@ -121,9 +135,15 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   const [copiedId, setCopiedId] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [draft, setDraft] = useState(null);
+  const [renamingId, setRenamingId] = useState(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [printing, setPrinting] = useState(null); // l'entrée à imprimer
+  const [libNote, setLibNote] = useState("");
 
   const composerRef = useRef(null);
   const resultRef = useRef(null);
+  const fileRef = useRef(null);
+  const cancelRename = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -470,6 +490,75 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     composerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  /* ---------- renommer, dupliquer, sortir ---------- */
+
+  const startRename = (item) => {
+    setRenamingId(item.id);
+    setRenameDraft(item.title);
+  };
+
+  const commitRename = async () => {
+    if (!renamingId) return;
+    await commit(renameEntry(library, renamingId, renameDraft));
+    setRenamingId(null);
+    setRenameDraft("");
+  };
+
+  const duplicate = async (item) => {
+    const copyOf = duplicateEntry(item);
+    await commit([copyOf, ...library]);
+    setOpenId(copyOf.id);
+    setLibNote(`Dupliqué : « ${copyOf.title} ».`);
+  };
+
+  const downloadOne = (item) => downloadText(`${slugify(item.title)}.md`, toMarkdown(item));
+
+  const exportAll = () => {
+    if (!library.length) return;
+    const day = new Date().toISOString().slice(0, 10);
+    downloadText(
+      `bibliotheque-${user.id}-${day}.json`,
+      exportBundle(library, user.id),
+      "application/json;charset=utf-8"
+    );
+    setLibNote(`${library.length} prompt(s) exporté(s) — garde ce fichier, c'est ta copie de secours.`);
+  };
+
+  const importAll = async (file) => {
+    if (!file) return;
+    setLibNote("");
+    setLibError("");
+    const { items, error } = parseBundle(await file.text());
+    if (error) return setLibError(error);
+    const { items: merged, added, updated, skipped } = mergeLibraries(library, items);
+    await commit(merged);
+    setLibNote(
+      `Import : ${added} ajouté(s), ${updated} mis à jour, ${skipped} déjà à jour ou plus ancien(s).`
+    );
+  };
+
+  /* Le prompt affiché n'est pas encore une entrée : on en fabrique une, le
+     temps de l'imprimer ou de la télécharger. Elle n'est pas enregistrée. */
+  const currentEntry = () => makeEntry({ idea, prompt, limit: settings.charLimit, version });
+
+  /* ---------- impression ----------
+     La feuille sort du #root par un portail : la règle d'impression masque
+     alors l'application entière d'un seul trait, sans dépendre de l'arbre. */
+  useEffect(() => {
+    if (!printing) return;
+    const done = () => setPrinting(null);
+    window.addEventListener("afterprint", done);
+    /* La feuille doit être peinte avant que le navigateur fige la page. */
+    const start = setTimeout(() => window.print(), 90);
+    /* Filet : tous les navigateurs n'émettent pas `afterprint`. */
+    const release = setTimeout(done, 60000);
+    return () => {
+      window.removeEventListener("afterprint", done);
+      clearTimeout(start);
+      clearTimeout(release);
+    };
+  }, [printing]);
+
   /* ---------- dérivés ---------- */
 
   const busy = phase === "analyzing" || phase === "generating";
@@ -739,6 +828,20 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
                   >
                     {auditLoading ? "Audit en cours…" : "Audit juge LLM"}
                   </button>
+                  <button
+                    className="btn btn-quiet"
+                    type="button"
+                    onClick={() => downloadOne(currentEntry())}
+                  >
+                    Télécharger .md
+                  </button>
+                  <button
+                    className="btn btn-quiet"
+                    type="button"
+                    onClick={() => setPrinting(currentEntry())}
+                  >
+                    Imprimer
+                  </button>
                 </div>
 
                 {libError && <p className="note note-error mt-4">{libError}</p>}
@@ -800,13 +903,41 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           {library.length > 0 && (
             <input
               type="text"
-              className="mb-5"
+              className="mb-4"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Chercher un titre, une idée, un mot du prompt…"
             />
           )}
 
+          {/* Copie de secours. La bibliothèque ne vit que dans la clé-valeur :
+              un magasin vidé, et tout part. Un fichier chez soi répare ça. */}
+          <div className="mb-5 flex flex-wrap items-center gap-2">
+            <button
+              className="btn btn-quiet"
+              type="button"
+              onClick={exportAll}
+              disabled={library.length === 0}
+            >
+              Exporter tout (.json)
+            </button>
+            <button className="btn btn-quiet" type="button" onClick={() => fileRef.current?.click()}>
+              Importer un fichier
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = ""; // réimporter le même fichier reste possible
+                importAll(file);
+              }}
+            />
+          </div>
+
+          {libNote && <p className="note note-info mb-4">{libNote}</p>}
           {libError && <p className="note note-error mb-4">{libError}</p>}
 
           {libLoading ? (
@@ -825,7 +956,35 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
               {shown.map((item) => (
                 <article key={item.id} className="lib-card">
                   <div className="flex items-start justify-between gap-3">
-                    <h3 className="lib-title">{item.title}</h3>
+                    {renamingId === item.id ? (
+                      <input
+                        type="text"
+                        className="lib-rename"
+                        value={renameDraft}
+                        autoFocus
+                        onChange={(e) => setRenameDraft(e.target.value)}
+                        /* Entrée et Échap sortent tous deux par le flou :
+                           une seule voie de validation, donc pas de double
+                           enregistrement — et Échap annule vraiment. */
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.currentTarget.blur();
+                          if (e.key === "Escape") {
+                            cancelRename.current = true;
+                            e.currentTarget.blur();
+                          }
+                        }}
+                        onBlur={() => {
+                          if (cancelRename.current) {
+                            cancelRename.current = false;
+                            setRenamingId(null);
+                            return;
+                          }
+                          commitRename();
+                        }}
+                      />
+                    ) : (
+                      <h3 className="lib-title">{item.title}</h3>
+                    )}
                     <span className="tag tag-accent">v{item.version}</span>
                   </div>
 
@@ -858,6 +1017,18 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
                     </button>
                     <button className="btn btn-quiet" type="button" onClick={() => openEditor(item)}>
                       Modifier
+                    </button>
+                    <button className="btn btn-quiet" type="button" onClick={() => startRename(item)}>
+                      Renommer
+                    </button>
+                    <button className="btn btn-quiet" type="button" onClick={() => duplicate(item)}>
+                      Dupliquer
+                    </button>
+                    <button className="btn btn-quiet" type="button" onClick={() => downloadOne(item)}>
+                      Télécharger
+                    </button>
+                    <button className="btn btn-quiet" type="button" onClick={() => setPrinting(item)}>
+                      Imprimer
                     </button>
                     {item.idea && (
                       <button className="btn btn-quiet" type="button" onClick={() => reuse(item)}>
@@ -930,6 +1101,28 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           }}
         />
       )}
+
+      {printing && createPortal(<PrintSheet entry={printing} />, document.body)}
+    </div>
+  );
+}
+
+/* ================================================================
+   Feuille d'impression — invisible à l'écran, seule à l'impression.
+   Montée hors du #root par un portail : la règle @media print n'a alors
+   qu'une chose à masquer, l'application entière.
+   ================================================================ */
+
+function PrintSheet({ entry }) {
+  return (
+    <div className="print-only">
+      <h1>{entry.title || "Sans titre"}</h1>
+      <p className="print-meta">
+        v{entry.version} · {entry.count} caractères · limite {entry.limit} ·{" "}
+        {formatDate(entry.updatedAt || entry.savedAt)}
+      </p>
+      {entry.idea && <p className="print-idea">Idée de départ — {entry.idea}</p>}
+      <pre>{entry.prompt}</pre>
     </div>
   );
 }

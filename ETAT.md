@@ -7,6 +7,31 @@ l'alias stable.
 Mis à jour le 2026-08-01. L'état vit ici : une coupure se reprend en lisant
 ce fichier, pas en refaisant le chemin.
 
+## Ce qu'on peut faire d'un prompt qu'on possède
+
+| Geste | Où | Note |
+|---|---|---|
+| Sauvegarder | après génération | existait |
+| Copier | résultat et carte | existait |
+| Modifier (titre + texte) | carte → feuille | existait |
+| Supprimer | carte, avec confirmation | existait |
+| Reprendre l'idée | carte | existait |
+| **Renommer** | carte, champ en ligne | Entrée valide, Échap annule |
+| **Dupliquer** | carte | « X (copie) », puis « (copie 2) » |
+| **Télécharger .md** | résultat et carte | prompt en clôture de code |
+| **Imprimer** | résultat et carte | feuille propre, noir sur blanc |
+| **Exporter tout / Importer** | bandeau de la bibliothèque | copie de secours en JSON |
+
+L'export existe pour une raison précise : la bibliothèque ne vit que dans la
+clé-valeur, et le dépôt documente déjà qu'un magasin vidé perd tout. Un
+fichier chez soi répare ça. L'import **fusionne** au lieu d'écraser — à
+identifiant égal, la date de modification tranche, donc réimporter deux fois
+le même fichier ne duplique rien.
+
+L'impression passe par un **portail hors du `#root`** : la règle `@media
+print` n'a plus qu'une chose à masquer, l'application entière. Pas de fenêtre
+surgissante, donc rien à bloquer.
+
 ## Dernière vérification — 2026-08-01, 11:55 puis 14:38, commit `3f25393`
 
 **43 assertions au vert, deux passes séparées de trois heures**, sur
@@ -27,6 +52,29 @@ autre compte — Gabriela, `2000G` : 43 assertions au vert également. Les
 variables de l'environnement Preview fonctionnent donc pour de bon, et la
 bibliothèque réelle de Gabriela est ressortie intacte de la sonde (une
 entrée conservée, la sonde effacée).
+
+### Puis, après les gestes de bibliothèque : **77 assertions**
+
+Production déployée sur ordre de Gabriel et vérifiée dans la foulée (compte
+Gabriel, `1966G`). Le vérificateur a gagné 34 assertions :
+
+- **22 sur les fonctions pures** de `src/library.js` — renommage, duplication
+  numérotée, Markdown, aller-retour export→import, refus d'un fichier qui
+  n'est pas du JSON, fusion qui ignore le plus ancien et n'ajoute rien à la
+  seconde importation. Elles tournent en Node, sans navigateur : c'est pour
+  cela que ces fonctions ne touchent ni au DOM ni au réseau.
+- **5 sur l'impression, réellement jouée** : le bouton est cliqué dans
+  Chrome, la feuille se monte hors du `#root`, elle contient le prompt et son
+  titre, et `window.print` est appelé une fois exactement. `window.print` est
+  neutralisé avant tout le reste — sans quoi une boîte d'impression
+  suspendrait Chrome, et le vérificateur avec.
+- **Le contrôle mobile mesurait une seule surface.** La sonde répondait
+  « non authentifié » avec zéro prénom : elle ne voyait donc qu'un portail
+  vide, et l'atelier n'avait **jamais** été mesuré — ni ses cartes, ni leurs
+  neuf boutons. Elle sert maintenant deux surfaces, portail et atelier chargé
+  d'une carte, chacune avec un **marqueur** vérifié dans le DOM : sans lui,
+  un « zéro débordement » ne serait qu'un faux vert sur une page blanche.
+  Mesuré : aucun débordement, 320 à 430 px, sur les deux.
 
 Contrôlé au passage : `SESSION_SECRET`, `ANTHROPIC_SHARED_KEY` et les cinq
 variables KV présents sur les trois environnements ; `/api/reset` répond

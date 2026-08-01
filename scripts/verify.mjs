@@ -81,6 +81,75 @@ if (bundle) {
   assert("aucune variable VITE_ sensible", !/VITE_[A-Z_]*(KEY|TOKEN|SECRET)/.test(bundle));
 }
 
+/* ---------- 1 bis. ce qu'on fait d'un prompt qu'on possède ----------
+   Renommer, dupliquer, télécharger, exporter, réimporter : tout cela est
+   écrit en fonctions pures dans src/library.js, précisément pour être
+   rejoué ici sans navigateur. */
+
+section("Bibliothèque — renommer, dupliquer, exporter");
+
+{
+  const lib = await import("../src/library.js");
+
+  assert("slugify nettoie accents et espaces", lib.slugify("Créer l'appli d'échecs !") === "creer-l-appli-d-echecs");
+  assert("slugify ne rend jamais vide", lib.slugify("—  ") === "prompt", lib.slugify("—  "));
+
+  const entry = lib.makeEntry({
+    idea: "une conciergerie de copropriétés",
+    prompt: "# QUI TU ES\nsonde\n# SORTIE\nSinon tu continues.",
+    limit: 3900,
+    version: 2,
+  });
+
+  const md = lib.toMarkdown(entry);
+  assert("le Markdown porte le titre", md.startsWith("# une conciergerie de copropriétés"));
+  assert("le prompt est clôturé", md.includes("```\n# QUI TU ES"), "sinon ses sections deviendraient des titres");
+  assert("l'idée de départ est jointe", md.includes("## L'idée de départ"));
+
+  const copy1 = lib.duplicateEntry(entry);
+  const copy2 = lib.duplicateEntry(copy1);
+  assert("dupliquer donne un nouvel identifiant", copy1.id !== entry.id);
+  assert("le prompt est inchangé", copy1.prompt === entry.prompt);
+  assert("la copie se nomme « (copie) »", copy1.title.endsWith(" (copie)"), copy1.title);
+  assert("la copie d'une copie se numérote", copy2.title.endsWith(" (copie 2)"), copy2.title);
+
+  const renamed = lib.renameEntry([entry, copy1], entry.id, "  Conciergerie v2  ");
+  assert("renommer coupe les blancs", renamed[0].title === "Conciergerie v2", renamed[0].title);
+  assert("renommer ne touche pas les autres", renamed[1].title === copy1.title);
+  assert("un titre vide retombe sur « Sans titre »", lib.renameEntry([entry], entry.id, "   ")[0].title === "Sans titre");
+
+  /* export → import : le tour complet doit rendre la même bibliothèque. */
+  const shelf = [entry, copy1];
+  const round = lib.parseBundle(lib.exportBundle(shelf, "karl"));
+  assert("l'export se relit sans erreur", round.error === "", round.error);
+  assert("rien ne se perd au passage", round.items.length === 2, `${round.items.length}/2`);
+  assert("le prompt survit à l'aller-retour", round.items[0].prompt === shelf[0].prompt);
+
+  assert("un fichier qui n'est pas du JSON est refusé", Boolean(lib.parseBundle("ceci n'est pas du json").error));
+  assert("un JSON sans prompts est refusé", Boolean(lib.parseBundle('{"items":[{"titre":"vide"}]}').error));
+  assert("une liste nue est acceptée", lib.parseBundle(JSON.stringify(shelf)).error === "");
+
+  /* fusion : ajouter, mettre à jour le plus récent, ignorer le plus ancien */
+  const older = { ...entry, prompt: "ancien", updatedAt: "2020-01-01T00:00:00.000Z" };
+  const newer = { ...entry, prompt: "récent", updatedAt: "2099-01-01T00:00:00.000Z" };
+
+  const add = lib.mergeLibraries([entry], [copy1]);
+  assert("un inconnu est ajouté", add.added === 1 && add.items.length === 2);
+
+  const beaten = lib.mergeLibraries([entry], [older]);
+  assert("un import plus ancien est ignoré", beaten.skipped === 1 && beaten.items[0].prompt === entry.prompt);
+
+  const wins = lib.mergeLibraries([entry], [newer]);
+  assert("un import plus récent remplace", wins.updated === 1 && wins.items[0].prompt === "récent");
+
+  const twice = lib.mergeLibraries(lib.mergeLibraries([], shelf).items, shelf);
+  assert(
+    "réimporter le même fichier ne duplique rien",
+    twice.items.length === 2 && twice.added === 0,
+    `${twice.items.length} entrées, ${twice.added} ajout(s)`
+  );
+}
+
 /* ---------- 2. l'accès ---------- */
 
 if (!BASE) {
@@ -202,101 +271,137 @@ section("Mobile");
 
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
+/* `--window-size` est ignoré par ce Chrome headless : le viewport reste
+   à 485 px quoi qu'on demande. On force donc la largeur de mise en page
+   depuis la page elle-même, puis on cherche un élément plus large que
+   son conteneur — la signature d'un `min-width: auto` non maîtrisé. */
+const PROBE_SCRIPT = `<script>setTimeout(() => {
+  const out = [];
+  for (const W of [320, 360, 390, 430]) {
+    document.documentElement.style.width = W + "px";
+    document.documentElement.style.overflowX = "visible";
+    document.body.style.overflowX = "visible";
+    void document.body.offsetWidth;
+    let over = 0;
+    document.querySelectorAll("*").forEach((el) => {
+      if (el.id !== "PROBE" && el.getBoundingClientRect().width > W + 1) over += 1;
+    });
+    out.push(W + ":" + over);
+  }
+  const p = document.createElement("pre");
+  p.id = "PROBE";
+  p.textContent = out.join(" ");
+  document.body.appendChild(p);
+}, 1500);</script>`;
+
+/* DEUX surfaces, pas une.
+   Jusqu'ici la sonde répondait « non authentifié » avec zéro prénom : elle
+   ne mesurait donc qu'un portail vide, et l'atelier — ses cartes, leurs neuf
+   boutons — n'avait jamais été mesuré à 320 px. Chaque surface porte un
+   marqueur : sans lui dans le DOM, la mesure ne veut rien dire et un zéro
+   débordement serait un faux vert. */
+const CARTE_SONDE = {
+  id: "sonde-verif",
+  title: "Une conciergerie de copropriétés pilotée par des agents autonomes",
+  idea: "une conciergerie de copropriétés pilotée par des agents",
+  prompt: "# QUI TU ES\nsonde\n# SORTIE\nSinon tu continues.",
+  count: 52,
+  limit: 3900,
+  version: 2,
+  savedAt: "2026-08-01T10:00:00.000Z",
+  updatedAt: "2026-08-01T10:00:00.000Z",
+};
+
+const SURFACES = [
+  {
+    label: "portail",
+    marker: "Karl",
+    routes: {
+      "/api/session": {
+        ok: true,
+        authenticated: false,
+        user: null,
+        users: [
+          { id: "gabriel", name: "Gabriel", initial: "G" },
+          { id: "karl", name: "Karl", initial: "K" },
+          { id: "raphaelle", name: "Raphaëlle", initial: "R" },
+          { id: "gabriela", name: "Gabriela", initial: "G" },
+          { id: "cecile", name: "Cécile", initial: "C" },
+        ],
+      },
+    },
+  },
+  {
+    label: "atelier",
+    marker: "Dupliquer",
+    routes: {
+      "/api/session": {
+        ok: true,
+        authenticated: true,
+        user: { id: "sonde", name: "Sonde", email: "" },
+        users: [],
+      },
+      "/api/prompts": { ok: true, items: [CARTE_SONDE] },
+      "/api/usage": { ok: true, total: 0.4237 },
+    },
+    /* Impression, pour de vrai : on clique le bouton et on regarde si la
+       feuille est montée hors du #root avec le prompt dedans.
+       `window.print` est neutralisé AVANT tout — ce script classique
+       s'exécute avant le module différé de l'application. Sans cela, une
+       boîte d'impression suspendrait Chrome, et le vérificateur avec. */
+    action: `<script>
+      window.print = () => { window.__printed = (window.__printed || 0) + 1; };
+      setTimeout(() => {
+        const btn = [...document.querySelectorAll("button")]
+          .find((b) => b.textContent.trim() === "Imprimer");
+        if (btn) btn.click();
+        setTimeout(() => {
+          const sheet = document.querySelector(".print-only");
+          const out = document.createElement("pre");
+          out.id = "PRINT";
+          out.textContent = JSON.stringify({
+            bouton: Boolean(btn),
+            feuille: Boolean(sheet),
+            prompt: Boolean(sheet && sheet.textContent.includes("# QUI TU ES")),
+            titre: Boolean(sheet && sheet.textContent.includes("conciergerie")),
+            appels: window.__printed || 0,
+          });
+          document.body.appendChild(out);
+        }, 400);
+      }, 1700);
+    </script>`,
+    check(dom) {
+      const found = /id="PRINT">([^<]*)</.exec(dom);
+      if (!found) return assert("atelier — sonde d'impression muette", false);
+      const r = JSON.parse(found[1]);
+      assert("le bouton Imprimer est là", r.bouton);
+      assert("la feuille d'impression se monte hors du #root", r.feuille);
+      assert("elle porte le prompt entier", r.prompt);
+      assert("et son titre", r.titre);
+      assert("window.print appelé une fois exactement", r.appels === 1, `${r.appels} appel(s)`);
+    },
+  },
+];
+
 if (!existsSync(CHROME) || !bundle) {
   console.log("… ignoré : Chrome ou dist/ introuvable.");
 } else {
-  const probe = join(tmpdir(), `bpg-probe-${process.pid}`);
-  rmSync(probe, { recursive: true, force: true });
-  cpSync("dist", probe, { recursive: true });
-
-  /* `--window-size` est ignoré par ce Chrome headless : le viewport reste
-     à 485 px quoi qu'on demande. On force donc la largeur de mise en page
-     depuis la page elle-même, puis on cherche un élément plus large que
-     son conteneur — la signature d'un `min-width: auto` non maîtrisé. */
-  appendFileSync(
-    join(probe, "index.html"),
-    `<script>setTimeout(() => {
-      const out = [];
-      for (const W of [320, 360, 390, 430]) {
-        document.documentElement.style.width = W + "px";
-        document.documentElement.style.overflowX = "visible";
-        document.body.style.overflowX = "visible";
-        void document.body.offsetWidth;
-        let over = 0;
-        document.querySelectorAll("*").forEach((el) => {
-          if (el.id !== "PROBE" && el.getBoundingClientRect().width > W + 1) over += 1;
-        });
-        out.push(W + ":" + over);
-      }
-      const p = document.createElement("pre");
-      p.id = "PROBE";
-      p.textContent = out.join(" ");
-      document.body.appendChild(p);
-    }, 1200);</script>`
-  );
-
-  const server = createServer((req, res) => {
-    const url = (req.url || "/").split("?")[0];
-    if (url.startsWith("/api/")) {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ ok: true, authenticated: false, users: [], user: null }));
-    }
-    try {
-      const file = url === "/" ? "/index.html" : url;
-      const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
-      res.writeHead(200, { "Content-Type": types[extname(file)] || "application/octet-stream" });
-      res.end(readFileSync(join(probe, file)));
-    } catch {
-      res.writeHead(404).end("");
-    }
-  });
-
-  await new Promise((r) => server.listen(0, r));
-  const port = server.address().port;
-
-  /* Lancement ASYNCHRONE, impérativement.
-     Mesuré : `execFileSync` bloque la boucle d'événements de Node — le
-     serveur ouvert juste au-dessus, dans ce même processus, ne pouvait
-     alors plus répondre à Chrome. Interblocage parfait, vérificateur
-     suspendu sans un octet de sortie.
-     Pas de `--user-data-dir` jetable : mesuré, un profil neuf fait pendre
-     `--dump-dom` au-delà de la minute, là où le profil par défaut rend la
-     main en quelques secondes. Le garde-fou est le délai ci-dessous. */
-  let dom = "";
-  try {
-    dom = await new Promise((resolve, reject) => {
-      const child = execFile(
-        CHROME,
-        [
-          "--headless=new",
-          "--disable-gpu",
-          "--virtual-time-budget=6000",
-          "--dump-dom",
-          `http://localhost:${port}/`,
-        ],
-        { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
-        (error, stdout) => (error ? reject(error) : resolve(stdout))
+  for (const surface of SURFACES) {
+    const measured = await measureOverflow(surface);
+    if (!measured) continue;
+    assert(
+      `${surface.label} — la surface s'est bien rendue`,
+      measured.dom.includes(surface.marker),
+      `« ${surface.marker} » attendu dans le DOM`
+    );
+    for (const [width, over] of measured.widths) {
+      assert(
+        `${surface.label} — aucun débordement à ${width} px`,
+        over === 0,
+        `${over} élément(s) trop large(s)`
       );
-      setTimeout(() => {
-        child.kill("SIGKILL");
-        reject(new Error("Chrome n'a pas rendu la main en 60 s"));
-      }, 60000).unref();
-    });
-  } catch (error) {
-    assert("Chrome a répondu", false, error.message.split("\n")[0]);
-  }
-
-  server.close();
-  rmSync(probe, { recursive: true, force: true });
-
-  const found = /id="PROBE">([^<]*)</.exec(dom);
-  if (dom && !found) {
-    assert("mesure du débordement obtenue", false, "sonde muette");
-  } else if (found) {
-    for (const pair of found[1].trim().split(" ")) {
-      const [width, over] = pair.split(":");
-      assert(`aucun débordement à ${width} px`, Number(over) === 0, `${over} élément(s) trop large(s)`);
     }
+    surface.check?.(measured.dom);
   }
 }
 
@@ -425,6 +530,83 @@ async function callRaw(path, method = "GET", payload, withCookie = false) {
 
 function call(path, method, payload) {
   return callRaw(path, method, payload, true);
+}
+
+/* Sert une copie de dist/ instrumentée, avec des réponses d'API en dur, et
+   rend ce que Chrome a mesuré. Une surface = un serveur, un Chrome. */
+async function measureOverflow({ label, routes, action }) {
+  const probe = join(tmpdir(), `bpg-probe-${process.pid}-${label}`);
+  rmSync(probe, { recursive: true, force: true });
+  cpSync("dist", probe, { recursive: true });
+  appendFileSync(join(probe, "index.html"), PROBE_SCRIPT + (action || ""));
+
+  const server = createServer((req, res) => {
+    const url = (req.url || "/").split("?")[0];
+    if (url.startsWith("/api/")) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify(routes[url] ?? { ok: true }));
+    }
+    try {
+      const file = url === "/" ? "/index.html" : url;
+      const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
+      res.writeHead(200, { "Content-Type": types[extname(file)] || "application/octet-stream" });
+      res.end(readFileSync(join(probe, file)));
+    } catch {
+      res.writeHead(404).end("");
+    }
+  });
+
+  await new Promise((r) => server.listen(0, r));
+  const port = server.address().port;
+
+  /* Lancement ASYNCHRONE, impérativement.
+     Mesuré : `execFileSync` bloque la boucle d'événements de Node — le
+     serveur ouvert juste au-dessus, dans ce même processus, ne pouvait
+     alors plus répondre à Chrome. Interblocage parfait, vérificateur
+     suspendu sans un octet de sortie.
+     Pas de `--user-data-dir` jetable : mesuré, un profil neuf fait pendre
+     `--dump-dom` au-delà de la minute, là où le profil par défaut rend la
+     main en quelques secondes. Le garde-fou est le délai ci-dessous. */
+  let dom = "";
+  try {
+    dom = await new Promise((resolve, reject) => {
+      const child = execFile(
+        CHROME,
+        [
+          "--headless=new",
+          "--disable-gpu",
+          "--virtual-time-budget=8000",
+          "--dump-dom",
+          `http://localhost:${port}/`,
+        ],
+        { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
+        (error, stdout) => (error ? reject(error) : resolve(stdout))
+      );
+      setTimeout(() => {
+        child.kill("SIGKILL");
+        reject(new Error("Chrome n'a pas rendu la main en 60 s"));
+      }, 60000).unref();
+    });
+  } catch (error) {
+    assert(`${label} — Chrome a répondu`, false, error.message.split("\n")[0]);
+  }
+
+  server.close();
+  rmSync(probe, { recursive: true, force: true });
+
+  if (!dom) return null;
+
+  const found = /id="PROBE">([^<]*)</.exec(dom);
+  if (!found) {
+    assert(`${label} — mesure du débordement obtenue`, false, "sonde muette");
+    return null;
+  }
+
+  const widths = found[1]
+    .trim()
+    .split(" ")
+    .map((pair) => pair.split(":").map(Number));
+  return { dom, widths };
 }
 
 function readAll(dir) {
