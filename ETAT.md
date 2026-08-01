@@ -11,61 +11,66 @@ sur tout ce qui ne dépend pas des deux fournisseurs.
 | Parcours | État | Preuve |
 |---|---|---|
 | Prénom choisi | ✅ | trois prénoms servis par `/api/session` |
-| Mauvais code refusé | ⛔ bloqué | KV absent → 503 au lieu de 401 |
-| Bon code retenu | ⛔ bloqué | idem |
-| Code changé | ⛔ bloqué | idem |
-| Code oublié → mail | ⛔ bloqué | Resend non provisionné |
+| Mauvais code refusé | ✅ | 401, aucun cookie posé |
+| Bon code retenu | ✅ | 200, cookie `HttpOnly` + `Secure` |
+| Code changé | ✅ | aller-retour `2000G` → provisoire → `2000G` |
+| Code oublié → mail | ⛔ bloqué | pas de fournisseur d'envoi (voir ci-dessous) |
 | Réglages | ✅ | clé, modèles, limite — navigateur |
 | Idée sans question | ✅ | analyse renvoie `{"questions":[]}` → génère |
 | Idée ambiguë | ✅ | jusqu'à 3 questions matérielles |
-| Génération trop longue réparée | ✅ | 3795 → 3004 → 2694 pour une limite de 3000 |
+| Génération trop longue réparée | ✅ | 3691 → 3137 → 2829 pour une limite de 3000 |
 | Audit appliqué en v2 | ✅ | juge Opus 5, corrections réinjectées |
-| Sauvegarde puis rechargement | ⚠️ partiel | double navigateur OK ; serveur bloqué (KV) |
+| Sauvegarde puis rechargement | ✅ | écrit, relu, supprimé ; 401 sans session |
 | Mobile | ✅ | grilles fluides, cibles ≥ 44 px, modales pleine largeur |
 
 Preview courante :
-`https://boris-prompt-generator-9e41k5hb7-coe-startup.vercel.app`
+`https://boris-prompt-generator-b9bgx8hu6-coe-startup.vercel.app`
+
+Codes en place : `1994K`, `2000R`, `2000G`. Aucun mail enregistré — c'est à
+chacun de poser le sien depuis Réglages.
+
 Protection SSO désactivée sur le projet — sinon Karl, Raphaëlle et Gabriela
-se heurteraient au mur Vercel avant même la porte d'entrée.
+se heurteraient au mur Vercel avant même la porte d'entrée. **Elle se
+remet à chaque déploiement : la redésactiver après chaque `vercel deploy`.**
 
-## Ce qui bloque, et pourquoi je ne l'ai pas franchi
+## Ce qui bloque : l'envoi d'e-mail
 
-Vercel exige d'accepter les conditions Marketplace **dans un navigateur**
-avant de provisionner Upstash (clé-valeur) et Resend (envoi). Le CLI le dit
-lui-même : `integration_terms_acceptance_required`, non contournable en
-non-interactif.
+Upstash est provisionné (`boris-kv`), connecté aux trois environnements.
 
-C'est un engagement juridique au nom de l'org COE Startup. Gabriel m'a
-autorisé à cliquer via Chrome ; l'extension Claude-in-Chrome n'était pas
-connectée au moment du run, donc je n'ai pas pu. Rien d'autre ne manque.
+Resend, non. L'intégration Marketplace **exige un domaine d'envoi** :
 
-    https://vercel.com/coe-startup/~/integrations/accept-terms/upstash?source=cli
-    https://vercel.com/coe-startup/~/integrations/accept-terms/resend?source=cli
+    Error: Missing required metadata: domain, region.
+
+L'org COE Startup n'a aucun domaine, et « domaine » figure explicitement à
+l'ESCALADE du programme. Je prépare, je dépose, je repars — je ne choisis
+pas un domaine d'envoi à la place de Gabriel.
+
+Deux sorties, au choix :
+
+1. **Compte Resend direct** (le plus rapide, aucun domaine). Gabriel crée un
+   compte sur resend.com, génère une clé, me la donne :
+   `vercel env add RESEND_API_KEY production` (+ preview, development).
+   L'expéditeur reste `onboarding@resend.dev` et Resend ne délivre alors
+   qu'à l'adresse propriétaire du compte — c'est exactement la boîte de test
+   voulue par le programme.
+2. **Domaine chez Resend** (durable). Gabriel nomme un domaine qu'il possède,
+   je provisionne via le Marketplace et `MAIL_FROM` devient une vraie adresse.
 
 ## Reprise — dans l'ordre
 
 ```bash
 cd "$HOME/Documents/L'Oreal/Boris-Prompt-Generator"
 
-# 1. provisionner (après acceptation des conditions)
-vercel integration add upstash/upstash-kv --no-claim -n boris-kv
-vercel integration add resend --no-claim -n boris-mail
-
-# 2. récupérer les variables et poser les codes initiaux
-vercel env pull .env.local
-node scripts/seed.mjs karl=1994K raphaelle=2000R gabriela=2000G
-
-# 3. redéployer, puis rejouer TOUT
+# après avoir posé RESEND_API_KEY (sortie 1) OU provisionné (sortie 2)
 npm run build
 vercel deploy --yes
+vercel project protection disable --sso   # sinon le mur SSO revient
 BASE_URL=<url> VERIFY_USER=karl VERIFY_CODE=1994K npm run verify
 ```
 
-`SESSION_SECRET` est déjà posé sur les trois environnements.
-
-`MAIL_FROM` reste sur `onboarding@resend.dev` tant qu'aucun domaine n'est
-vérifié : Resend ne délivrera alors qu'à l'adresse propriétaire du compte.
-Vérifier un domaine relève de l'escalade — c'est à Gabriel.
+`SESSION_SECRET` et les variables KV sont déjà posés sur les trois
+environnements. Les codes sont déjà dans la clé-valeur : `seed.mjs` n'est à
+relancer que si le magasin est vidé.
 
 ## Mesures qui ont changé le code
 
