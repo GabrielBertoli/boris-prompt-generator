@@ -14,17 +14,18 @@ sur tout ce qui ne dépend pas des deux fournisseurs.
 | Mauvais code refusé | ✅ | 401, aucun cookie posé |
 | Bon code retenu | ✅ | 200, cookie `HttpOnly` + `Secure` |
 | Code changé | ✅ | aller-retour `2000G` → provisoire → `2000G` |
-| Code oublié → mail | ⛔ bloqué | pas de fournisseur d'envoi (voir ci-dessous) |
+| Code oublié → mail | ⛔ **décidé** | pas d'envoi pour l'instant (voir ci-dessous) |
 | Réglages | ✅ | clé, modèles, limite — navigateur |
+| Clé de l'atelier | ✅ | servie à la session, refusée au portail, absente du bundle |
 | Idée sans question | ✅ | analyse renvoie `{"questions":[]}` → génère |
 | Idée ambiguë | ✅ | jusqu'à 3 questions matérielles |
 | Génération trop longue réparée | ✅ | 3691 → 3137 → 2829 pour une limite de 3000 |
 | Audit appliqué en v2 | ✅ | juge Opus 5, corrections réinjectées |
 | Sauvegarde puis rechargement | ✅ | écrit, relu, supprimé ; 401 sans session |
-| Mobile | ✅ | grilles fluides, cibles ≥ 44 px, modales pleine largeur |
+| Mobile | ✅ | zéro débordement mesuré à 320, 360, 390 et 430 px |
 
 Preview courante :
-`https://boris-prompt-generator-b9bgx8hu6-coe-startup.vercel.app`
+`https://boris-prompt-generator-l2f1mya9x-coe-startup.vercel.app`
 
 Codes en place : `1994K`, `2000R`, `2000G`. Aucun mail enregistré — c'est à
 chacun de poser le sien depuis Réglages.
@@ -33,7 +34,22 @@ Protection SSO désactivée sur le projet — sinon Karl, Raphaëlle et Gabriela
 se heurteraient au mur Vercel avant même la porte d'entrée. **Elle se
 remet à chaque déploiement : la redésactiver après chaque `vercel deploy`.**
 
-## Ce qui bloque : l'envoi d'e-mail
+## La clé de l'atelier
+
+Une clé Anthropic commune (`ANTHROPIC_SHARED_KEY`, variable Vercel) évite
+que chacun ait à en poser une. Elle est servie par `/api/session` **à une
+session valide uniquement** : jamais au portail, jamais dans le bundle,
+jamais gardée dans `localStorage` — une sortie l'emporte. L'appel part
+toujours en direct du navigateur ; aucune fonction ne relaie.
+
+Conséquence assumée, dite à Gabriel avant câblage : **qui entre peut la
+lire dans son navigateur.** Trois enfants derrière un code, c'est le bon
+compromis. Cette clé a aussi transité par une conversation — à faire
+tourner le jour où ça compte.
+
+Chacun peut poser la sienne dans les réglages ; elle prime alors.
+
+## Ce qui reste ouvert : l'envoi d'e-mail
 
 Upstash est provisionné (`boris-kv`), connecté aux trois environnements.
 
@@ -42,10 +58,14 @@ Resend, non. L'intégration Marketplace **exige un domaine d'envoi** :
     Error: Missing required metadata: domain, region.
 
 L'org COE Startup n'a aucun domaine, et « domaine » figure explicitement à
-l'ESCALADE du programme. Je prépare, je dépose, je repars — je ne choisis
-pas un domaine d'envoi à la place de Gabriel.
+l'ESCALADE du programme.
 
-Deux sorties, au choix :
+**Décision de Gabriel, 2026-08-01 : on livre sans mail.** « Code oublié »
+répond franchement que la réinitialisation n'est pas câblée ; un code perdu
+se repose avec `seed.mjs`. L'adresse e-mail reste enregistrable dans les
+réglages : elle servira le jour où l'envoi sera branché.
+
+Deux sorties possibles ce jour-là :
 
 1. **Compte Resend direct** (le plus rapide, aucun domaine). Gabriel crée un
    compte sur resend.com, génère une clé, me la donne :
@@ -90,3 +110,22 @@ boucle vit maintenant dans `src/generate.js`, partagée par les deux.
 **`.gitignore` : l'exception doit suivre la règle large.** Vercel a ajouté
 `.env*` après mon `!.env.example` — le modèle de variables se retrouvait
 ignoré. Ordre corrigé, vérifié par `git check-ignore -v`.
+
+**Le vérificateur s'interbloquait lui-même.** Le contrôle mobile ouvre un
+serveur de sonde puis lance Chrome ; avec `execFileSync`, la boucle
+d'événements de Node reste bloquée et ce serveur — dans le même processus —
+ne peut plus répondre. Chrome attendait une page qui ne viendrait jamais,
+le vérificateur pendait sans un octet de sortie. Lancement asynchrone.
+
+**Un profil Chrome neuf fait pendre `--dump-dom`.** Ajouté pour éviter une
+contention de verrou, `--user-data-dir` jetable dépassait la minute là où le
+profil par défaut rend la main en secondes. Retiré ; le délai de 60 s reste
+comme garde-fou.
+
+**Le « bug mobile » n'existait pas.** Une capture headless à 390 px montrait
+le texte coupé à droite : `--window-size` est ignoré par ce Chrome, le
+viewport restait à 485 px, et l'image n'était qu'un rognage. Mesure faite :
+zéro débordement de 320 à 430 px. Les durcissements CSS (`min-width: 0` sur
+les enfants de grille, `min()` dans les `minmax`) sont conservés — corrects
+par construction — mais ils ne réparaient rien. La leçon est dans le
+vérificateur : le contrôle mobile y est désormais permanent.
