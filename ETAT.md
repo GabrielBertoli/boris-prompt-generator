@@ -1,11 +1,19 @@
 # État du run
 
 **EN PRODUCTION** — https://boris-prompt-generator.vercel.app
-Promue par Gabriel le 2026-08-01, vérificateur intégralement au vert sur
-l'alias stable.
+Déployée sur ordre de Gabriel le 2026-08-01, **77 assertions au vert sur
+l'alias stable** après coup. Zéro échec.
 
-Mis à jour le 2026-08-01. L'état vit ici : une coupure se reprend en lisant
-ce fichier, pas en refaisant le chemin.
+Mis à jour le 2026-08-01, session close proprement, arbre git propre.
+L'état vit ici : une coupure se reprend en lisant ce fichier, pas en
+refaisant le chemin.
+
+**Un seul chantier reste ouvert, et il n'appartient pas à l'agent** :
+l'envoi du mail de réinitialisation, suspendu à une clé Resend de la main
+de Gabriel (§ « Ce qui reste ouvert »). Tout le reste est livré et vérifié.
+
+Reprendre par : `npm run verify` seul (assertions locales), puis avec
+`BASE_URL=…` pour viser un déploiement.
 
 ## Ce qu'on peut faire d'un prompt qu'on possède
 

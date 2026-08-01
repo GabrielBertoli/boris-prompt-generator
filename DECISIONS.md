@@ -98,6 +98,49 @@ mesure : compteurs, prompts, journaux). Encre chaude presque noire, braise
 orange, craie. Le compteur de caractères est le seul chiffre géant de la page :
 c'est lui qui dit si le prompt passe.
 
+## 11. Gestes de bibliothèque : fonctions pures d'un côté, DOM de l'autre
+
+Renommer, dupliquer, mettre en Markdown, exporter, réimporter, fusionner :
+tout cela vit en fonctions **pures** dans `src/library.js` — ni `document`,
+ni `fetch`. Le vérificateur les rejoue alors en Node, sans navigateur, pour
+le prix d'un import. Seule `downloadText` touche au DOM, et seulement à
+l'appel. C'est la raison d'être de la séparation : 22 assertions gratuites.
+
+L'import **fusionne** au lieu d'écraser. À identifiant égal, c'est la date de
+modification qui tranche : un fichier plus ancien n'efface jamais plus récent
+que lui, et réimporter deux fois le même fichier ne duplique rien. Toute
+entrée venue du dehors est reconstruite champ par champ (`normalize`) — on ne
+garde jamais un objet importé tel quel.
+
+L'export existe parce que la bibliothèque ne vit que dans la clé-valeur : la
+décision n° 2 acte déjà qu'un magasin vidé perd tout. Un fichier chez soi est
+la seule reprise possible.
+
+## 12. Impression : un portail hors du `#root`
+
+La feuille d'impression est montée par `createPortal` dans `document.body`,
+hors de l'arbre React. La règle `@media print` n'a dès lors qu'une chose à
+masquer — `#root`, l'application entière — au lieu de dépendre de la
+structure du DOM. Pas de fenêtre surgissante : rien à bloquer, rien à
+autoriser.
+
+Conséquence pour le vérificateur : `window.print` doit être **neutralisé
+avant tout le reste** avant de cliquer le bouton dans Chrome. Une vraie boîte
+d'impression suspendrait le navigateur, et le vérificateur avec — la même
+classe de blocage que celle déjà rencontrée avec `execFileSync`.
+
+## 13. Le vérificateur mesure les surfaces réelles, avec marqueur
+
+La sonde mobile répondait « non authentifié » et servait zéro prénom : elle
+ne mesurait qu'un portail vide. L'atelier — ses cartes, leurs neuf boutons —
+n'avait jamais été mesuré. Elle sert désormais **deux surfaces**, chacune
+avec ses réponses d'API en dur.
+
+Chaque surface porte un **marqueur** vérifié dans le DOM (« Karl » pour le
+portail, « Dupliquer » pour l'atelier). Sans lui, une page qui ne se rend pas
+donnerait « zéro débordement » — un faux vert. La règle générale : une mesure
+n'a de valeur que si l'on prouve d'abord qu'on a mesuré la bonne chose.
+
 ---
 
 ## Reste à la main de Gabriel

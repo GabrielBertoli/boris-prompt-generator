@@ -47,4 +47,17 @@ Tous les parcours passent en preview, assertions au vert bundle et mail compris 
      perdu. Décisions prises et pourquoi, pistes fermées (pour ne pas les
      rouvrir), état d'avancement, pièges rencontrés. -->
 
-- Ouvert le 2026-08-01 — dossier créé par la tour, rien n'a encore été fait.
+- Ouvert le 2026-08-01. **Livré et en production le jour même** :
+  https://boris-prompt-generator.vercel.app
+- L'état fait foi dans **`ETAT.md`** (où ça en est, ce qui reste, la reprise)
+  et **`DECISIONS.md`** (chaque arbitrage et son motif). Une reprise se fait
+  en les lisant — pas en refaisant le chemin.
+- Vérificateur : `npm run verify` (avec `BASE_URL` pour viser un
+  déploiement). **77 assertions**, au vert sur la production le 2026-08-01.
+  Rien ne se déclare sans l'avoir rejoué.
+- Un seul chantier reste ouvert, et il n'appartient pas à l'agent : l'envoi
+  du mail de réinitialisation, suspendu à une clé Resend de la main de
+  Gabriel — voir `ETAT.md`, § « Ce qui reste ouvert ».
+- Piste fermée, ne pas la rouvrir : la protection SSO de Vercel **ne revient
+  pas** après un déploiement. Une consigne antérieure prescrivait de la
+  redésactiver à chaque fois ; c'est faux, mesuré le 2026-08-01.
