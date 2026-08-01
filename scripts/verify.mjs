@@ -447,10 +447,6 @@ function inOrder(text, markers) {
   return true;
 }
 
-function list(users) {
-  return (users || []).map((u) => u.name).join(", ");
-}
-
 function loadEnvFile(path) {
   let raw;
   try {

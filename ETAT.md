@@ -7,6 +7,26 @@ l'alias stable.
 Mis à jour le 2026-08-01. L'état vit ici : une coupure se reprend en lisant
 ce fichier, pas en refaisant le chemin.
 
+## Dernière vérification — 2026-08-01, 11:55 puis 14:38, commit `3f25393`
+
+**43 assertions au vert, deux passes séparées de trois heures**, sur
+`https://boris-prompt-generator.vercel.app` — la production elle-même, pas
+une preview. Y compris ce qu'apportait le dernier commit : compteur de
+dépense (crédité, relu, delta absurde refusé, fermé sans session) et limite
+3900 — premier jet à 3737 puis 3663 caractères, aucune réparation
+nécessaire ni l'une ni l'autre fois. C'est la mesure qui justifiait le
+passage à 3900, reproduite.
+
+Ce que sert la production a été comparé au build local, pas supposé : le
+JavaScript est **byte-identique** (SHA-256 `5276815a…`), la feuille de style
+est un surensemble de deux utilitaires inemployés — la construction distante
+balaie un fichier de plus que la locale. Rien ne manque en ligne.
+
+Contrôlé au passage : protection SSO bien désactivée (l'atelier est servi,
+pas le mur Vercel) ; `SESSION_SECRET`, `ANTHROPIC_SHARED_KEY` et les cinq
+variables KV présents sur les trois environnements ; `/api/reset` répond
+franchement que l'envoi n'est pas câblé, conformément à la décision.
+
 ## Où ça en est
 
 Le produit est écrit, construit, déployé en preview. Le vérificateur passe
