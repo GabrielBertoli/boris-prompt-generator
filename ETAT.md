@@ -22,8 +22,13 @@ JavaScript est **byte-identique** (SHA-256 `5276815a…`), la feuille de style
 est un surensemble de deux utilitaires inemployés — la construction distante
 balaie un fichier de plus que la locale. Rien ne manque en ligne.
 
-Contrôlé au passage : protection SSO bien désactivée (l'atelier est servi,
-pas le mur Vercel) ; `SESSION_SECRET`, `ANTHROPIC_SHARED_KEY` et les cinq
+**Troisième passe sur une preview neuve** (`…-ljvvoudrf`, 14:40), avec un
+autre compte — Gabriela, `2000G` : 43 assertions au vert également. Les
+variables de l'environnement Preview fonctionnent donc pour de bon, et la
+bibliothèque réelle de Gabriela est ressortie intacte de la sonde (une
+entrée conservée, la sonde effacée).
+
+Contrôlé au passage : `SESSION_SECRET`, `ANTHROPIC_SHARED_KEY` et les cinq
 variables KV présents sur les trois environnements ; `/api/reset` répond
 franchement que l'envoi n'est pas câblé, conformément à la décision.
 
@@ -62,8 +67,14 @@ ne répond pas), `scripts/verify.mjs` (liste attendue, nommée et non comptée),
 puis `node scripts/seed.mjs <id>=<code>`.
 
 Protection SSO désactivée sur le projet — sinon Karl, Raphaëlle et Gabriela
-se heurteraient au mur Vercel avant même la porte d'entrée. **Elle se
-remet à chaque déploiement : la redésactiver après chaque `vercel deploy`.**
+se heurteraient au mur Vercel avant même la porte d'entrée. **Elle ne
+revient pas.** Une note antérieure disait de la redésactiver après chaque
+`vercel deploy` : c'est faux, et vérifié comme tel. `vercel project
+protection boris-prompt-generator` rend `"ssoProtection": null`, et une
+preview déployée sans toucher au réglage sert l'atelier en 200. La
+désactivation est un réglage de projet, pas une propriété de déploiement ;
+ce qui l'avait fait croire, c'est l'état initial du projet, protégé par
+défaut à sa création. Un geste de moins à chaque reprise.
 
 ## La clé de l'atelier
 
@@ -115,7 +126,6 @@ cd "$HOME/Documents/L'Oreal/Boris-Prompt-Generator"
 # après avoir posé RESEND_API_KEY (sortie 1) OU provisionné (sortie 2)
 npm run build
 vercel deploy --yes
-vercel project protection disable --sso   # sinon le mur SSO revient
 BASE_URL=<url> VERIFY_USER=karl VERIFY_CODE=1994K npm run verify
 ```
 
