@@ -491,6 +491,57 @@ Ce que ces ajouts ont fait tomber, et qui compte autant :
   incapable de rétrécir). Elle nomme maintenant le premier fautif et sa
   largeur réelle.
 
+## 26. Tout tient dans l'écran
+
+Mesuré le 2026-08-02 sur un 16 pouces (1728 × 935) avec un prompt de
+4 068 caractères : **la page faisait 1 148 px pour 935 visibles — elle
+dépassait de 213 px.** Gabriel devait faire défiler pour voir le bas de
+son propre atelier.
+
+Les trois quarts n'étaient pas du contenu :
+
+- **96 px de rembourrage** en bas (`pb-24`), hérité d'une page qui
+  défilait ;
+- **92 px** pour une note de bas de colonne devenue redondante avec le
+  pied de page ajouté une heure plus tôt — sa phrase est passée à l'aide,
+  chapitre 04, où elle est lue ;
+- **110 px de pied de page** là où un bandeau d'une ligne suffit. Un pied
+  MENTIONNE, l'aide explique : la note de sécurité complète y prenait
+  trois lignes. Elle reste entière dans l'infobulle et au chapitre 12 ;
+  le bandeau n'en porte qu'une ligne, qui s'abrège au lieu de se replier.
+
+Le reste était structurel, et c'est le vrai sujet : **trois colonnes
+posées côte à côte empilent quand même leur hauteur sur la PAGE.** Elles
+ne le doivent pas — un atelier se regarde d'un coup d'œil. La fenêtre est
+donc divisée une fois pour toutes (barre + colonnes + pied) et **chaque
+colonne défile chez elle**. Le pupitre et l'épreuve le faisaient déjà ;
+le marbre s'y met.
+
+Quatre points qui portent le reste :
+
+- **Seulement au-delà de 1400 px**, là où les trois panneaux coexistent.
+  En dessous, l'épreuve est empilée sous le marbre : une hauteur figée la
+  couperait, et le défilement de page est alors la bonne réponse. Mesuré :
+  à 1280 × 720 la page dépasse toujours de 309 px, et c'est voulu.
+- **`min-height: 0` sur la coquille** est ce qui fait tenir l'édifice.
+  Sans lui, un enfant de flex refuse de descendre sous la hauteur de son
+  contenu : la coquille repousse le pied hors de l'écran et on n'a rien
+  gagné.
+- **La barre cesse d'être collante** au-delà de 1400 px : plus rien ne
+  défile au-dessus d'elle, elle n'aurait rien à quoi se coller, et son
+  `top: 0` la superposerait au premier enfant.
+- **`remonter()` vise deux cibles.** La fenêtre ne défile plus du tout à
+  ces largeurs : `window.scrollTo` seul ne faisait donc plus rien
+  précisément là où la disposition à trois panneaux existe. Il faut aussi
+  remettre le marbre à zéro.
+
+Le contrôle est au pilotage, à cinq tailles d'écran réelles, avec un vrai
+prompt : mesurer avec soixante caractères prouverait qu'une page vide
+tient dans l'écran. Il vérifie quatre choses par taille — que la page ne
+dépasse pas, que le pied est visible sans défiler, que « Copier le
+prompt » est atteignable d'emblée, et que **le marbre défile chez lui** :
+sans cette dernière, « ça tient » voudrait dire « c'est tronqué ».
+
 ---
 
 ## Reste à la main de Gabriel

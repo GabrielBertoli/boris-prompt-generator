@@ -76,6 +76,7 @@ export const CHAPITRES = [
       "Sauvegarder le range dans la casse. En pratique il s'y range tout seul dès la première correction : rien ne se perd faute d'avoir cliqué.",
       "Télécharger .md pour un fichier chez toi, Imprimer pour une feuille propre en noir sur blanc.",
       "Rejuger redemande un avis au juge sur la version affichée, sans rien régénérer.",
+      "Un prompt ne se juge pas sur le papier. La note du juge est un avis avant l'épreuve du feu : lance-le pour de bon, et laisse les deux premiers jours te dire ce qu'il fallait corriger.",
     ],
   },
   {
@@ -191,6 +192,13 @@ export const PIED = {
   marque: "Atelier Boris",
   annee: 2026,
   droits: "Tous droits réservés.",
+  /* Deux longueurs, et ce n'est pas un doublon. Le pied de page est un
+     bandeau d'une ligne : la note complète y prenait trois lignes et
+     110 px de haut — à elle seule la moitié de ce qui faisait dépasser
+     l'écran. La version courte s'affiche, la longue reste dans
+     l'infobulle et surtout dans l'aide, là où on la lit vraiment.
+     Un pied de page MENTIONNE ; l'aide explique. */
+  securiteCourte: "Clé API dans ton navigateur · codes en empreinte · prompts privés.",
   securite:
     "Ta clé API ne quitte jamais ce navigateur et les appels partent en direct. " +
     "Les codes d'accès sont conservés sous forme d'empreinte irréversible, jamais en clair. " +

@@ -33,6 +33,10 @@
      elle-même (`min-height`), donc la constante ne peut pas mentir — mesuré
      à 65 px de contenu, 66 pour que le `min-height` porte vraiment. */
   --topbar-h: 66px;
+  /* Le pied est un bandeau d'une ligne. Comme --topbar-h, la constante
+     est APPLIQUÉE par l'élément lui-même (min-height) : elle ne peut donc
+     pas mentir à ce qui se calcule dessus. */
+  --pied-h: 38px;
 
   --r-sm: 8px;
   --r-md: 12px;
@@ -72,6 +76,10 @@ body {
 .atelier {
   position: relative;
   min-height: 100vh;
+  /* Remplace le `pb-24` qui était dans le balisage : en CSS, un palier peut
+     l'annuler. Ces 96 px comptaient pour près de la moitié des 213 px qui
+     faisaient dépasser l'écran d'un portable 16 pouces. */
+  padding-bottom: 96px;
   isolation: isolate;
   background:
     radial-gradient(900px 460px at 78% -12%, rgba(255, 122, 61, 0.13), transparent 62%),
@@ -1049,11 +1057,14 @@ button.avatar:focus-visible {
   width: 100%;
   max-width: 84rem;
   margin: 0 auto;
-  padding: 24px 20px 30px;
+  padding: 9px 20px;
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 24px;
+  align-items: center;
+  gap: 6px 20px;
+  /* Fait de --pied-h une mesure et non une supposition — même raison
+     qu'à la barre du haut (DECISIONS.md § 20). */
+  min-height: var(--pied-h);
 }
 
 /* `flex: none` interdisait de rétrécir : la ligne légale, en chasse fixe
@@ -1075,11 +1086,17 @@ button.avatar:focus-visible {
   margin-left: 1px;
 }
 
+/* Une ligne, qui s'abrège plutôt que de passer à la ligne : c'est une
+   MENTION, pas la note de sécurité — celle-ci est en entier dans l'aide
+   (chapitre 12) et dans l'infobulle. Un pied de page qui explique est un
+   pied de page qui pousse le reste hors de l'écran. */
 .pied-secu {
-  flex: 1 1 320px;
+  flex: 1 1 200px;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 11.5px;
-  line-height: 1.6;
   color: var(--muted-2);
 }
 
@@ -1846,6 +1863,78 @@ button.avatar:focus-visible {
   .atelier-main {
     grid-column: 2;
     padding: 0 32px;
+  }
+}
+
+/* ---------- la coquille tient EXACTEMENT dans l'écran ----------
+
+   Mesuré le 2026-08-02 sur un 16 pouces (1728 × 935) avec un prompt de
+   4 068 caractères : la page faisait 1 148 px pour 935 visibles — elle
+   dépassait de 213 px. Les trois quarts n'étaient pas du contenu : 96 px
+   de rembourrage en bas, 92 px pour une note de colonne redondante avec
+   le pied, et un pied de 110 px là où un bandeau d'une ligne suffit.
+
+   Le reste est structurel, et c'est ce que règle ce bloc : trois colonnes
+   posées les unes à côté des autres empilent leur hauteur sur la PAGE.
+   Elles ne le doivent pas — un atelier se regarde d'un coup d'œil. La
+   fenêtre est donc divisée une fois pour toutes (barre + colonnes + pied),
+   et chaque colonne défile CHEZ ELLE. Le pupitre et l'épreuve le faisaient
+   déjà ; le marbre s'y met.
+
+   Seulement au-delà de 1400 px, là où les trois panneaux coexistent. En
+   dessous, l'épreuve est empilée sous le marbre : une hauteur figée la
+   couperait, et le défilement de page est alors la bonne réponse. */
+
+@media (min-width: 1400px) {
+  .atelier {
+    height: 100vh;
+    min-height: 0;
+    padding-bottom: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Plus rien ne défile au-dessus d'elle : collante, elle n'aurait rien à
+     quoi se coller, et son `top: 0` la superposerait au premier enfant. */
+  .topbar {
+    position: static;
+    flex: none;
+  }
+
+  /* `min-height: 0` est ce qui fait tenir tout l'édifice : sans lui, un
+     enfant de flex refuse de descendre sous la hauteur de son contenu, la
+     coquille repousse le pied hors de l'écran et on n'a rien gagné. */
+  .shell {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .pupitre,
+  .epreuve {
+    position: relative;
+    top: auto;
+    height: 100%;
+    max-height: none;
+  }
+
+  /* Le marbre défile chez lui, comme les deux bords. */
+  .atelier-main {
+    height: 100%;
+    overflow-y: auto;
+    padding-bottom: 28px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+
+  .pied {
+    flex: none;
+  }
+
+  /* La feuille se calait sur la fenêtre entière ; elle vit maintenant dans
+     une colonne qui a sa propre hauteur, barre ET pied déduits. */
+  .prompt-sheet {
+    max-height: max(240px, calc(100vh - var(--topbar-h) - var(--pied-h) - 330px));
   }
 }
 

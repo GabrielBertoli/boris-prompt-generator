@@ -205,8 +205,15 @@ for (const w of [1920, 1600, 1400, 1280, 1100, 900, 430, 390, 360, 320]) {
   ok("il nomme son propriétaire", legal.includes("Gabriel Bertoli"), legal.trim());
   ok("il porte le ®", legal.includes("®"));
   ok("il réserve les droits", /tous droits réservés/i.test(legal));
+  /* Le pied MENTIONNE la sécurité en une ligne ; la note complète est dans
+     l'infobulle et dans l'aide. Un pied qui explique est un pied qui pousse
+     le reste hors de l'écran — mesuré : 110 px à lui seul. */
   const secu = (await page.locator(".pied-secu").textContent()) || "";
-  ok("il porte une note de sécurité", secu.length > 100 && /navigateur/i.test(secu));
+  const secuLong = (await page.locator(".pied-secu").getAttribute("title")) || "";
+  ok("le pied mentionne la sécurité en une ligne", /navigateur/i.test(secu) && secu.length < 90, `${secu.length} car.`);
+  ok("et porte la note complète en infobulle", secuLong.length > 100 && /empreinte/i.test(secuLong));
+  const hauteurPied = await page.locator(".pied").evaluate((e) => Math.round(e.getBoundingClientRect().height));
+  ok("le pied tient sur un bandeau", hauteurPied <= 48, `${hauteurPied} px`);
 
   /* --- l'aide --- */
   await page.getByRole("button", { name: "Aide — comment ça marche" }).click();
@@ -286,6 +293,66 @@ for (const w of [320, 360, 430, 640, 900]) {
   ok(`barre ${w}px — l'aide reste atteignable`, m.aide);
   ok(`barre ${w}px — le compte ouvre les réglages`, m.compte);
   await ctx.close();
+}
+
+/* ---------- 6. tout tient dans l'écran ----------
+
+   Mesuré le 2026-08-02 : la page faisait 1 148 px pour 935 visibles sur un
+   16 pouces. Au-delà de 1400 px, plus rien ne défile hors de l'écran — la
+   fenêtre est divisée une fois (barre + colonnes + pied) et chaque colonne
+   défile chez elle. La sonde tient un VRAI prompt : mesurer avec soixante
+   caractères prouverait qu'une page vide tient dans l'écran. */
+{
+  const LONG =
+    Array.from({ length: 8 }, (_, i) =>
+      `# SECTION ${i}\n` +
+      Array.from({ length: 6 }, (_, j) =>
+        `Ligne ${j} — phrase dense de la méthode Boris qui occupe la largeur utile du marbre.`
+      ).join("\n")
+    ).join("\n\n") + "\n\n# SORTIE\nSinon tu continues.";
+
+  for (const [w, h] of [[1728, 935], [1680, 950], [1512, 820], [1440, 780], [1400, 700]]) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: h } });
+    await ctx.route("**/api/session", (r) =>
+      r.fulfill({ json: { ok: true, authenticated: true, user: { id: "s", name: "Sonde", email: "" }, users: [] } })
+    );
+    await ctx.route("**/api/prompts", (r) =>
+      r.fulfill({ json: { ok: true, items: [{ ...CARTE, prompt: LONG, count: LONG.length }] } })
+    );
+    await ctx.route("**/api/usage", (r) => r.fulfill({ json: { ok: true, total: 1.17 } }));
+    const page = await ctx.newPage();
+    await page.goto(BASE, { waitUntil: "networkidle" });
+    await page.locator(".casse-toggle").click();
+    await page.locator(".casse-open").first().click();
+    await page.waitForSelector(".atelier-main .prompt-sheet");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(500);
+
+    const m = await page.evaluate(() => {
+      const de = document.documentElement;
+      const bas = (s) => {
+        const e = document.querySelector(s);
+        return e ? Math.round(e.getBoundingClientRect().bottom) : -1;
+      };
+      const marbre = document.querySelector(".atelier-main");
+      return {
+        deborde: de.scrollHeight - de.clientHeight,
+        vue: de.clientHeight,
+        basPied: bas(".pied"),
+        basCopier: bas(".atelier-main .btn-primary"),
+        /* Rien ne tient dans l'écran en étant COUPÉ : le marbre doit pouvoir
+           défiler chez lui, sinon « ça tient » veut dire « c'est tronqué ». */
+        marbreDefile: marbre ? marbre.scrollHeight > marbre.clientHeight ||
+          getComputedStyle(marbre).overflowY === "auto" : false,
+      };
+    });
+
+    ok(`${w}×${h} — la page ne dépasse pas l'écran`, m.deborde === 0, `${m.deborde} px de trop`);
+    ok(`${w}×${h} — le pied est visible sans défiler`, m.basPied > 0 && m.basPied <= m.vue + 1, `bas à ${m.basPied} pour ${m.vue}`);
+    ok(`${w}×${h} — « Copier le prompt » est atteignable d'emblée`, m.basCopier > 0 && m.basCopier <= m.vue + 1, `bas à ${m.basCopier} pour ${m.vue}`);
+    ok(`${w}×${h} — le marbre défile chez lui`, m.marbreDefile);
+    await ctx.close();
+  }
 }
 
 await browser.close();

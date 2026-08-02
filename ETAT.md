@@ -95,8 +95,21 @@ bouton perdait son nom accessible sous 700 px ; Échap ne fermait aucun
 panneau ; et la sonde de débordement ne nommait pas le coupable — elle le
 nomme désormais, avec sa largeur.
 
-Preuves du jour : **197 assertions** locales (`npm run verify`) + **120 au
+Preuves du jour : **197 assertions** locales (`npm run verify`) + **142 au
 pilotage** (`npm run pilotage`), zéro échec.
+
+## Tout tient dans l'écran — 2026-08-02
+
+Mesuré : la page faisait **1 148 px pour 935 visibles** sur un 16 pouces,
+avec un prompt de 4 068 caractères — elle dépassait de 213 px. Au-delà de
+1400 px, la fenêtre est désormais divisée une fois pour toutes (barre +
+colonnes + pied) et **chaque colonne défile chez elle**. Vérifié à cinq
+tailles d'écran réelles : **0 px de dépassement**, pied visible, « Copier
+le prompt » atteignable sans défiler.
+
+Sous 1400 px la page défile encore, et c'est voulu : l'épreuve y est
+empilée sous le marbre, une hauteur figée la couperait. `DECISIONS.md`
+§ 26.
 
 ## Les codes ont été réémis — 2026-08-02
 

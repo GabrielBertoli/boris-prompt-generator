@@ -718,7 +718,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     setIdeeOuverte(true);
     setCasseOpen(false);
     setSheet(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    remonter();
     /* Le curseur dans la zone de saisie : sans cela, « nouveau prompt »
        laisse l'utilisateur devant un champ vide qu'il doit aller cliquer. */
     setTimeout(() => composerRef.current?.querySelector("textarea")?.focus(), 350);
@@ -1083,11 +1083,20 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   /* Le repli seul ne suffit pas : si la page est déjà défilée quand le
      travail s'ouvre, le haut retrouvé reste au-dessus du regard. On y
      remonte — une seule fois, au basculement, jamais pendant qu'on lit. */
+  /* Remonter en haut. DEUX cibles, et il en faut deux : au-delà de 1400 px
+     la fenêtre ne défile plus du tout — c'est la colonne du milieu qui
+     défile chez elle. `window.scrollTo` seul ne faisait donc plus rien
+     précisément là où la disposition à trois panneaux existe. */
+  const remonter = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    document.querySelector(".atelier-main")?.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const travailPrecedent = useRef(false);
   useEffect(() => {
     if (enTravail && !travailPrecedent.current) {
       setIdeeOuverte(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      remonter();
     }
     travailPrecedent.current = enTravail;
   }, [enTravail]);
@@ -1116,7 +1125,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   }, [library, search]);
 
   return (
-    <div className="atelier pb-24">
+    <div className="atelier">
       {/* ================= barre supérieure ================= */}
       <header className="topbar">
         <div className="topbar-inner">
@@ -1673,11 +1682,10 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
         )}
 
 
-        <footer className="mono mt-14 text-[11px] leading-relaxed" style={{ color: "var(--muted-2)" }}>
-          Le prompt généré part du prompt de référence de la session Odoo agentique. Un prompt ne
-          se juge pas sur papier — lance-le, et laisse les 48 premières heures faire le prochain
-          audit.
-        </footer>
+        {/* La note de bas de colonne est partie : elle répétait ce que dit
+            désormais le pied de page, et coûtait 92 px de haut avec sa
+            marge — sur les 213 px qui faisaient dépasser l'écran. Sa
+            phrase, qui valait d'être dite, est passée à l'aide (§ 04). */}
       </main>
 
       {/* ================= l'épreuve : le travail en cours, à droite =====
@@ -1951,7 +1959,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
             © {PIED.annee} {PIED.proprietaire} — {PIED.marque}
             <span className="pied-r" aria-label="marque déposée">®</span>. {PIED.droits}
           </p>
-          <p className="pied-secu">{PIED.securite}</p>
+          <p className="pied-secu" title={PIED.securite}>{PIED.securiteCourte}</p>
           <button className="link pied-lien" type="button" onClick={() => setSheet("aide")}>
             Comment ça marche
           </button>
