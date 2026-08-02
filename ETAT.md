@@ -70,6 +70,39 @@ le dit et sort en code 2 s'il manque.
 Preuves du jour : **165 assertions** locales (`npm run verify`) + **77 au
 pilotage** sur 10 paliers de 320 à 1920 px, zéro échec.
 
+## Les codes ont été réémis — 2026-08-02
+
+**Les cinq codes d'accès étaient en clair dans un dépôt GitHub public**
+(`GabrielBertoli/boris-prompt-generator`, créé le 2026-08-02 à 07:02) —
+dans `ETAT.md`, `CLAUDE.md` et le skill `verify`, **depuis le premier
+commit**. Le bundle, lui, était propre : l'invariant du programme ne dit
+que « le bundle ne contient aucun secret », et il regardait à côté.
+
+Ce que ça coûtait : `api/session.js` sert `ANTHROPIC_SHARED_KEY` à toute
+session valide. **Code lisible = clé Anthropic lisible**, à la charge de
+Gabriel. Exposition mesurée : environ une heure, 0 fork, 0 étoile.
+
+Décision de Gabriel : **garder le dépôt public, réémettre les codes.**
+Fait le 2026-08-02 :
+
+- cinq codes neufs posés par `scripts/seed.mjs` (scrypt, 86 caractères de
+  condensat chacun) ;
+- vérifié en production sur trois comptes : **ancien code → 401, nouveau
+  → 200** ;
+- les codes purgés des trois fichiers ; **ils ne sont écrits nulle part
+  dans le dépôt**, et Gabriel seul les détient. Ils restent dans
+  l'historique git public — c'est sans effet, ils ne valent plus rien.
+
+**Un garde-fou empêche la récidive** : `npm run verify` relit tous les
+fichiers suivis par git et échoue si le code de `VERIFY_CODE` y figure.
+Prouvé dans les deux sens le jour même — vert sur le dépôt purgé, rouge
+dès qu'on y remet un code. Le contrôle est exact (le code réellement en
+service) plutôt que générique : une expression qui devinerait « ce qui
+ressemble à un code » se ferait piéger au premier changement de format.
+
+Chacun peut changer le sien depuis Réglages — c'est ce qu'il faut faire
+d'un code transmis de la main à la main.
+
 ## La casse, à gauche
 
 La bibliothèque a quitté le bas de page pour devenir un panneau : **la
@@ -207,7 +240,7 @@ est un surensemble de deux utilitaires inemployés — la construction distante
 balaie un fichier de plus que la locale. Rien ne manque en ligne.
 
 **Troisième passe sur une preview neuve** (`…-ljvvoudrf`, 14:40), avec un
-autre compte — Gabriela, `2000G` : 43 assertions au vert également. Les
+autre compte — Gabriela : 43 assertions au vert également. Les
 variables de l'environnement Preview fonctionnent donc pour de bon, et la
 bibliothèque réelle de Gabriela est ressortie intacte de la sonde (une
 entrée conservée, la sonde effacée).
@@ -215,7 +248,7 @@ entrée conservée, la sonde effacée).
 ### Puis, après les gestes de bibliothèque : **77 assertions**, et **111** après le fil
 
 Production déployée sur ordre de Gabriel et vérifiée dans la foulée (compte
-Gabriel, `1966G`). Le vérificateur a gagné 34 assertions :
+Gabriel). Le vérificateur a gagné 34 assertions :
 
 - **22 sur les fonctions pures** de `src/library.js` — renommage, duplication
   numérotée, Markdown, aller-retour export→import, refus d'un fichier qui
@@ -249,7 +282,7 @@ sur tout ce qui ne dépend pas des deux fournisseurs.
 | Prénom choisi | ✅ | cinq prénoms servis par `/api/session` |
 | Mauvais code refusé | ✅ | 401, aucun cookie posé |
 | Bon code retenu | ✅ | 200, cookie `HttpOnly` + `Secure` |
-| Code changé | ✅ | aller-retour `2000G` → provisoire → `2000G` |
+| Code changé | ✅ | aller-retour code → provisoire → code |
 | Code oublié → mail | ⛔ **décidé** | pas d'envoi pour l'instant (voir ci-dessous) |
 | Réglages | ✅ | clé, modèles, limite (défaut 3900) — navigateur |
 | Clé de l'atelier | ✅ | servie à la session, refusée au portail, absente du bundle |
@@ -263,9 +296,9 @@ sur tout ce qui ne dépend pas des deux fournisseurs.
 Production : `https://boris-prompt-generator.vercel.app` (alias stable).
 Dernière preview : `https://boris-prompt-generator-3alg21uey-coe-startup.vercel.app`
 
-Comptes en place : Gabriel `1966G`, Karl `1994K`, Raphaëlle `2000R`,
-Gabriela `2000G`, Cécile `1998C` — les cinq vérifiés en production, bon
-code accepté et mauvais refusé.
+Comptes en place : Gabriel, Karl, Raphaëlle, Gabriela, Cécile — les cinq
+vérifiés en production, bon code accepté et mauvais refusé. **Les codes ne
+sont écrits nulle part dans le dépôt** — voir « Les codes ont été réémis ».
 Aucun mail enregistré : c'est à chacun de poser le sien depuis Réglages.
 
 Ajouter quelqu'un = trois endroits, plus la graine :
@@ -355,7 +388,7 @@ cd "$HOME/Documents/L'Oreal/Boris-Prompt-Generator"
 # après avoir posé RESEND_API_KEY (sortie 1) OU provisionné (sortie 2)
 npm run build
 vercel deploy --yes
-BASE_URL=<url> VERIFY_USER=karl VERIFY_CODE=1994K npm run verify
+BASE_URL=<url> VERIFY_USER=karl VERIFY_CODE=<Gabriel te le donne> npm run verify
 ```
 
 `SESSION_SECRET` et les variables KV sont déjà posés sur les trois

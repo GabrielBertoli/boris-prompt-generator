@@ -19,7 +19,7 @@ import {
 } from "node:fs";
 import { extname, join } from "node:path";
 import { createServer } from "node:http";
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 
 loadEnvFile(".env.local");
@@ -79,6 +79,38 @@ if (bundle) {
   assert("aucune clé Anthropic", !/sk-ant-[A-Za-z0-9_-]{20,}/.test(bundle));
   assert("aucun jeton Upstash", !/\bAX[A-Za-z0-9_-]{30,}/.test(bundle));
   assert("aucune variable VITE_ sensible", !/VITE_[A-Z_]*(KEY|TOKEN|SECRET)/.test(bundle));
+}
+
+/* ---------- 1 bis 0. le DÉPÔT non plus ----------
+
+   L'invariant ne disait que « le bundle ». Le 2026-08-02 on a mesuré que
+   les cinq codes d'accès étaient en clair dans ETAT.md, CLAUDE.md et le
+   skill de vérification — d'un dépôt GitHub PUBLIC, depuis le premier
+   commit. Le bundle était propre, et l'invariant tenu ; il regardait à
+   côté. Un code lisible ouvre une session, et une session valide reçoit
+   la clé Anthropic commune : dépôt public = clé publique.
+
+   Le contrôle est exact plutôt que générique : on cherche le code
+   RÉELLEMENT en service (celui de `VERIFY_CODE`). Une expression qui
+   devinerait « ce qui ressemble à un code » se serait fait piéger par
+   n'importe quel changement de format. */
+
+if (CODE) {
+  const suivis = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
+    .split("\0")
+    .filter(Boolean);
+  const coupables = suivis.filter((f) => {
+    try {
+      return readFileSync(f, "utf8").includes(CODE);
+    } catch {
+      return false; // binaire ou illisible : rien à y lire en clair
+    }
+  });
+  assert(
+    "aucun code d'accès dans un fichier suivi par git",
+    coupables.length === 0,
+    coupables.length ? coupables.join(", ") : `${suivis.length} fichiers relus`
+  );
 }
 
 /* ---------- 1 bis. ce qu'on fait d'un prompt qu'on possède ----------

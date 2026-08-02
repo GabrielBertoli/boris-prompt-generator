@@ -52,7 +52,9 @@ await page.evaluate(() => document.documentElement.scrollWidth - document.docume
 ### Parcours qui valent le coup
 
 1. **Portail** — toucher un prénom, mauvais code (« Code refusé. »), bon code.
-   Codes : Gabriel 1966G, Karl 1994K, Raphaëlle 2000R, Gabriela 2000G, Cécile 1998C.
+   Codes : ils ne sont écrits NULLE PART dans le dépôt — Gabriel les donne.
+   Ils y figuraient en clair jusqu'au 2026-08-02, dans un dépôt public ; ils
+   ont été réémis. Passe-les par `VERIFY_CODE`, jamais en dur.
    Limiteur : 8 essais par personne **et par IP** sur 10 min glissantes — alterner
    les comptes entre deux campagnes, sinon 429.
 2. **Génération** — l'analyse pose souvent 3 questions. Elles arrivent en
