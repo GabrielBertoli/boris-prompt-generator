@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CHAPITRES, PIED } from "./aide.js";
 import {
   api,
   callClaude,
@@ -701,6 +702,28 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     setDemand("");
   };
 
+  /* « Nouveau prompt » — le geste le plus courant, qui n'avait pas de
+     bouton. `reset` seul ne suffit pas : il fallait aussi vider l'idée
+     précédente (sans quoi le composeur rouvre sur le texte d'avant et on
+     croit que rien ne s'est passé), rouvrir la section repliée, refermer
+     la casse si elle est ouverte, et remonter.
+
+     Rien n'est perdu : le prompt en cours est déjà dans la casse — il s'y
+     enregistre d'office dès que le juge le note. */
+  const nouveauPrompt = () => {
+    reset();
+    setIdea("");
+    setConstraints("");
+    setShowConstraints(false);
+    setIdeeOuverte(true);
+    setCasseOpen(false);
+    setSheet(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    /* Le curseur dans la zone de saisie : sans cela, « nouveau prompt »
+       laisse l'utilisateur devant un champ vide qu'il doit aller cliquer. */
+    setTimeout(() => composerRef.current?.querySelector("textarea")?.focus(), 350);
+  };
+
   /* ---------- bibliothèque : sauver, modifier, supprimer ---------- */
 
   /* Une seule écriture pour tout ce qui change un prompt en cours : elle
@@ -1069,6 +1092,21 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     travailPrecedent.current = enTravail;
   }, [enTravail]);
 
+  /* Échap referme ce qui est ouvert par-dessus : c'est le premier geste
+     qu'on essaie devant un panneau modal, et il ne faisait rien. Un seul
+     cran par pression — la feuille d'abord, le tiroir ensuite : fermer les
+     deux d'un coup ferait disparaître un contexte qu'on n'a pas demandé à
+     quitter. */
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      if (sheet) setSheet(null);
+      else if (casseOpen) setCasseOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sheet, casseOpen]);
+
   const shown = useMemo(() => {
     const needle = search.trim().toLowerCase();
     if (!needle) return library;
@@ -1108,8 +1146,44 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
             </button>
           )}
 
+          {/* ---- créer un nouveau prompt ----
+              Le geste le plus courant n'avait pas de bouton : une fois dans
+              un prompt, repartir de zéro demandait de rouvrir l'idée puis
+              de trouver « Recommencer » — ou de recharger la page. Il est
+              dans la BARRE parce qu'on peut vouloir repartir depuis
+              n'importe où, y compris le nez dans la casse.
+              Il perd son mot avant 560 px et ne garde que le « + » : la
+              barre a déjà débordé de 15 px à 320 px le 2026-08-01, et c'est
+              toujours le dernier arrivé qui fait déborder. */}
           <button
-            className="btn btn-quiet"
+            className="btn btn-primary btn-neuf"
+            type="button"
+            onClick={nouveauPrompt}
+            disabled={busy}
+            /* `aria-label` et pas seulement le mot : sous 700 px le mot est
+               masqué et le « + » est aria-hidden — le bouton n'aurait plus
+               aucun nom du tout pour un lecteur d'écran. Trouvé au pilotage,
+               où le sélecteur ne le trouvait plus. */
+            aria-label="Créer un nouveau prompt"
+            title="Créer un nouveau prompt — le prompt en cours reste dans la casse"
+          >
+            <span aria-hidden="true">+</span>
+            <span className="btn-neuf-mot">Nouveau prompt</span>
+          </button>
+
+          <button
+            className="btn btn-quiet btn-aide"
+            type="button"
+            onClick={() => setSheet("aide")}
+            aria-label="Aide — comment ça marche"
+            title="Aide — comment ça marche"
+          >
+            <span aria-hidden="true">?</span>
+            <span className="btn-aide-mot">Aide</span>
+          </button>
+
+          <button
+            className="btn btn-quiet btn-reglages"
             type="button"
             onClick={() => setSheet("reglages")}
             aria-label="Réglages"
@@ -1119,9 +1193,20 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           </button>
 
           <div className="flex items-center gap-2 pl-1">
-            <span className="avatar" title={user.name}>
+            {/* Le sigle ouvre les réglages. Il était décoratif ; c'est
+                pourtant ce qu'on touche pour trouver son compte, et sous
+                560 px le bouton « Réglages » cède la place — sans ce clic,
+                les réglages ET « Sortir » (qui n'est visible qu'au-dessus
+                de 640 px) devenaient inatteignables sur un téléphone. */}
+            <button
+              className="avatar"
+              type="button"
+              title={`${user.name} — réglages et compte`}
+              aria-label={`${user.name} — réglages et compte`}
+              onClick={() => setSheet("reglages")}
+            >
               {user.initial}
-            </span>
+            </button>
             <button className="link hidden sm:inline" type="button" onClick={onLeave}>
               Sortir
             </button>
@@ -1815,6 +1900,8 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
       </aside>
       </div>
 
+      {sheet === "aide" && <AideSheet onClose={() => setSheet(null)} />}
+
       {sheet === "reglages" && (
         <SettingsSheet
           user={user}
@@ -1854,7 +1941,120 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
         />
       )}
 
+      {/* ================= le pied de page =================
+          Hors de la coquille : les deux bords sont collants et n'ont pas
+          de bas — un pied posé dans la colonne du milieu aurait été un pied
+          de colonne, pas un pied de page. */}
+      <footer className="pied">
+        <div className="pied-inner">
+          <p className="pied-legal mono">
+            © {PIED.annee} {PIED.proprietaire} — {PIED.marque}
+            <span className="pied-r" aria-label="marque déposée">®</span>. {PIED.droits}
+          </p>
+          <p className="pied-secu">{PIED.securite}</p>
+          <button className="link pied-lien" type="button" onClick={() => setSheet("aide")}>
+            Comment ça marche
+          </button>
+        </div>
+      </footer>
+
       {printing && createPortal(<PrintSheet entry={printing} />, document.body)}
+    </div>
+  );
+}
+
+/* ================================================================
+   L'AIDE — l'atelier expliqué, chapitre par chapitre.
+
+   Le contenu vit en données dans `src/aide.js` : le vérificateur le relit
+   sans navigateur, et les huit sections annoncées sont comparées à celles
+   qu'impose réellement le méta-prompt. Une aide qui décrit un produit qui
+   n'existe plus est pire que pas d'aide.
+
+   Le sommaire n'est pas décoratif : douze chapitres dans un panneau qui
+   défile, on n'atteint le douzième qu'en passant devant les onze autres.
+   ================================================================ */
+
+function AideSheet({ onClose }) {
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div
+        className="sheet sheet-aide"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Aide — comment ça marche"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <div className="eyebrow">Aide</div>
+            <h2 className="display mt-2 text-3xl">Comment ça marche</h2>
+          </div>
+          <button className="btn btn-quiet" type="button" onClick={onClose}>
+            Fermer
+          </button>
+        </div>
+
+        <p className="lede mb-6 text-[15px]">
+          Cet atelier transforme une idée racontée en français en un <em>mandat</em> : le
+          texte qu'on donne à un agent pour qu'il travaille seul. Il dit ce qu'il faut
+          obtenir, ce qui est interdit, comment on verra que c'est réussi, et quand
+          s'arrêter pour te demander. Chaque chapitre ci-dessous correspond à une partie
+          de l'écran.
+        </p>
+
+        {/* Le sommaire : douze chapitres se parcourent, ils ne se
+            déroulent pas. */}
+        <nav className="aide-sommaire" aria-label="Sommaire">
+          {CHAPITRES.map((c) => (
+            <a key={c.cle} className="aide-lien" href={`#aide-${c.cle}`}>
+              <span className="mono aide-lien-num">{c.num}</span>
+              {c.titre}
+            </a>
+          ))}
+        </nav>
+
+        {CHAPITRES.map((c) => (
+          <section key={c.cle} id={`aide-${c.cle}`} className="aide-chapitre">
+            <div className="section-head">
+              <span className="section-num">{c.num}</span>
+              <span className="section-title">{c.titre}</span>
+              <span className="section-line" />
+            </div>
+
+            {/* À quoi cette partie SERT, en une phrase, avant le détail :
+                c'est la seule ligne que beaucoup liront. */}
+            <p className="aide-sert">{c.sert}</p>
+
+            <ul className="aide-points">
+              {c.points.map((p, i) => (
+                <li key={i}>{p}</li>
+              ))}
+            </ul>
+
+            {c.sections && (
+              <div className="card-inset aide-sections mt-4 p-4">
+                {c.sections.map(([titre, quoi]) => (
+                  <div key={titre} className="aide-section">
+                    <div className="mono aide-section-titre">{titre}</div>
+                    <p className="aide-section-quoi">{quoi}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        ))}
+
+        <div className="aide-pied">
+          <p className="mono">
+            © {PIED.annee} {PIED.proprietaire} — {PIED.marque}
+            <span className="pied-r">®</span>. {PIED.droits}
+          </p>
+          <button className="btn btn-primary mt-4" type="button" onClick={onClose}>
+            Fermer l'aide
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

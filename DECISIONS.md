@@ -411,6 +411,86 @@ Trouvé par lui, au passage : deux boutons **« Replier »** dans la même
 page — celui de la casse et celui de l'idée. Indistinguables à l'oreille
 d'un lecteur d'écran. Le second est devenu « Replier l'idée ».
 
+## 24. L'aide est une donnée, pas une page
+
+Demandé par Gabriel le 2026-08-02 : « une section help qui contient la
+totalité de l'app, comment l'utiliser et à quoi chaque section sert, par
+chapitre ». Douze chapitres, un par partie de l'écran, plus la méthode et
+la sécurité.
+
+Elle est écrite en **données** (`src/aide.js`), pas en balisage. Le motif
+n'est pas l'élégance : c'est qu'une aide vieillit en silence. Elle décrit
+un produit qui a changé sans elle, et **elle se lit comme vraie** — c'est
+pire que pas d'aide. En données, le vérificateur la relit sans navigateur
+et prouve ce qui compte :
+
+- Les **huit sections annoncées sont exactement celles qu'impose
+  `buildMeta()`**, dans le même ordre. C'est LE contrôle : le jour où le
+  méta-prompt bougera, l'aide tombera en rouge au lieu de mentir.
+- Le plafond cité est `HARD_LIMIT`, relu depuis le code — un chiffre écrit
+  à la main aurait vieilli au premier changement.
+- Les douze chapitres attendus sont nommés un par un : ajouter un panneau
+  sans son chapitre échoue.
+- **Aucun jargon** (`oracle`, `invariant`, `webhook`…) dans la prose : la
+  demande était que n'importe qui comprenne, et c'est ce qui se perd le
+  plus vite. Les mots du métier sont ce que l'atelier ÉCRIT ; l'aide les
+  traduit, elle ne les suppose pas.
+
+Le sommaire n'est pas décoratif : douze chapitres dans un panneau qui
+défile, on n'atteint le douzième qu'en passant devant onze. Le pilotage
+vérifie que **chaque entrée mène réellement à sa cible** — une ancre morte
+ne se voit pas en comptant des éléments.
+
+## 25. Le pied de page, le bouton qui manquait, et ce qui allait avec
+
+Trois demandes du même jour, et trois défauts qu'elles ont fait sortir.
+
+**Le pied de page** porte la mention légale (`© 2026 Gabriel Bertoli —
+Atelier Boris®`) et une note de sécurité en clair : où reste la clé, comment
+sont gardés les codes, qui voit les prompts. Il vit **hors de la coquille** :
+les deux panneaux de bord sont collants et n'ont pas de bas — un pied posé
+dans la colonne du milieu aurait été un pied de colonne. Son contenu est
+dans `aide.js` avec le reste, donc relu par le vérificateur.
+
+Sur le `®` : il désigne une marque *déposée*. Rien n'indique que « Atelier
+Boris » le soit ; c'est la demande de Gabriel, elle est appliquée telle
+quelle, et cette ligne existe pour qu'il sache que le symbole n'est pas
+anodin s'il diffuse le site hors du cercle familial.
+
+**« Créer un nouveau prompt »** n'avait pas de bouton — le geste le plus
+courant de l'atelier. Il fallait rouvrir l'idée, y trouver « Recommencer »,
+ou recharger la page. Il est dans la **barre**, parce qu'on peut vouloir
+repartir depuis n'importe où. `reset()` seul ne suffisait pas : il fallait
+aussi vider l'idée précédente (sans quoi le composeur rouvre sur le texte
+d'avant et on croit que rien ne s'est passé), rouvrir la section repliée,
+refermer la casse et poser le curseur dans la saisie.
+
+Ce que ces ajouts ont fait tomber, et qui compte autant :
+
+- **La barre ne pouvait plus porter deux boutons de plus.** C'est
+  exactement ce qui l'avait fait déborder de 15 px la veille. Ils sont
+  dégraissés par paliers AVANT la mesure — « Aide » perd son mot à 900 px,
+  « Nouveau prompt » à 700, « Réglages » disparaît à 560 — et ils gardent
+  leur signe : un bouton sans libellé reste un bouton, un bouton disparu
+  ne l'est plus.
+- **Le sigle du compte est devenu un bouton.** Il était décoratif. Sous
+  560 px, « Réglages » cède la place et « Sortir » est déjà masqué sous
+  640 px : sans ce clic, les réglages **et la déconnexion** devenaient
+  inatteignables sur un téléphone.
+- **Un bouton sans nom accessible.** Sous 700 px le mot « Nouveau prompt »
+  est masqué et le « + » est `aria-hidden` : le bouton n'avait plus aucun
+  nom pour un lecteur d'écran. Trouvé par le pilotage, dont le sélecteur ne
+  le trouvait plus non plus. Corrigé par `aria-label`.
+- **Échap ne fermait rien.** C'est le premier geste qu'on essaie devant un
+  panneau modal. Un cran par pression — la feuille d'abord, le tiroir
+  ensuite : les fermer tous deux d'un coup ferait disparaître un contexte
+  qu'on n'a pas demandé à quitter.
+- **La sonde de débordement ne nommait pas le coupable.** « 1 élément trop
+  large » dit qu'il y a un défaut sans dire où ; il a fallu deviner deux
+  fois avant de trouver `p.pied-legal` (436 px, `flex: none`, donc
+  incapable de rétrécir). Elle nomme maintenant le premier fautif et sa
+  largeur réelle.
+
 ---
 
 ## Reste à la main de Gabriel

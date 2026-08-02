@@ -364,6 +364,84 @@ section("La note du juge");
   assert("et se reconnaît comme un arrêt", levée?.arret === true && levée?.name === "Arret");
 }
 
+/* ---------- 1 bis 4. l'aide et le pied de page ----------
+
+   L'aide est écrite en DONNÉES précisément pour être relue ici. Le
+   contrôle qui compte n'est pas « elle existe » mais « elle décrit ce
+   produit-ci » : les huit sections qu'elle annonce sont comparées à
+   celles que `buildMeta()` impose réellement au modèle. Une aide qui
+   promet une structure que l'atelier ne produit plus est pire que pas
+   d'aide — elle se lit comme vraie. */
+
+section("L'aide");
+
+{
+  const { CHAPITRES, PIED, SECTIONS_BORIS } = await import("../src/aide.js");
+  const { buildMeta, HARD_LIMIT } = await import("../src/meta.js");
+
+  assert("l'aide a douze chapitres", CHAPITRES.length === 12, `${CHAPITRES.length}`);
+  assert("chacun porte un numéro unique", new Set(CHAPITRES.map((c) => c.num)).size === 12);
+  assert("chacun porte une clé unique", new Set(CHAPITRES.map((c) => c.cle)).size === 12);
+  assert(
+    "chacun dit à quoi sa partie SERT",
+    CHAPITRES.every((c) => c.sert && c.sert.trim().length > 20),
+    CHAPITRES.filter((c) => !c.sert || c.sert.trim().length <= 20).map((c) => c.cle).join(", ") || "tous"
+  );
+  assert(
+    "aucun chapitre n'est vide",
+    CHAPITRES.every((c) => Array.isArray(c.points) && c.points.length >= 3),
+    CHAPITRES.filter((c) => (c.points || []).length < 3).map((c) => c.cle).join(", ") || "tous garnis"
+  );
+
+  /* Toutes les parties de l'écran sont couvertes. Sans cette liste, on
+     ajoute un panneau et l'aide vieillit en silence. */
+  for (const cle of ["porte", "idee", "questions", "marbre", "epreuve", "note", "fil", "casse", "reglages", "cout", "methode", "securite"]) {
+    assert(`le chapitre « ${cle} » est là`, CHAPITRES.some((c) => c.cle === cle));
+  }
+
+  /* LE contrôle : les huit sections annoncées sont celles qu'impose le
+     méta-prompt, dans le même ordre. */
+  const meta = buildMeta(3900);
+  assert("l'aide annonce huit sections", SECTIONS_BORIS.length === 8, `${SECTIONS_BORIS.length}`);
+  assert(
+    "ce sont exactement celles qu'impose le méta-prompt",
+    SECTIONS_BORIS.every(([titre]) => meta.includes(titre)),
+    SECTIONS_BORIS.filter(([t]) => !meta.includes(t)).map(([t]) => t).join(", ") || "les huit"
+  );
+  const rangs = SECTIONS_BORIS.map(([titre]) => meta.indexOf(titre));
+  assert("et dans le même ordre", rangs.every((r, i) => i === 0 || r > rangs[i - 1]));
+  assert(
+    "chaque section est traduite en français courant",
+    SECTIONS_BORIS.every(([, quoi]) => quoi && quoi.length > 40)
+  );
+
+  /* Le chapitre « méthode » cite le plafond réel : un chiffre écrit à la
+     main aurait vieilli au premier changement de HARD_LIMIT. */
+  const methode = CHAPITRES.find((c) => c.cle === "methode");
+  assert(
+    "le plafond annoncé est le vrai plafond",
+    methode.points.some((p) => p.includes(String(HARD_LIMIT))),
+    `${HARD_LIMIT} attendu`
+  );
+
+  /* L'aide ne doit pas retomber dans le jargon qu'elle est censée
+     traduire — c'est la demande, et c'est ce qui se perd le plus vite. */
+  const prose = CHAPITRES.flatMap((c) => [c.sert, ...c.points]).join(" ").toLowerCase();
+  for (const mot of ["oracle", "invariant", "idempot", "serverless", "webhook"]) {
+    assert(`sans jargon « ${mot} »`, !prose.includes(mot));
+  }
+
+  /* Le pied de page. */
+  assert("le pied nomme son propriétaire", PIED.proprietaire === "Gabriel Bertoli", PIED.proprietaire);
+  assert("il porte une année", Number(PIED.annee) >= 2026);
+  assert("il réserve les droits", /tous droits réservés/i.test(PIED.droits));
+  assert("il porte une note de sécurité", PIED.securite.length > 100, `${PIED.securite.length} caractères`);
+  assert(
+    "elle dit où reste la clé et comment sont gardés les codes",
+    /navigateur/i.test(PIED.securite) && /empreinte/i.test(PIED.securite)
+  );
+}
+
 /* ---------- 1 ter. le fil de correction ---------- */
 
 section("Fil de correction");
@@ -624,13 +702,34 @@ const PROBE_SCRIPT = `<script>
       document.documentElement.style.overflowX = "visible";
       document.body.style.overflowX = "visible";
       void document.body.offsetWidth;
+      /* On NOMME le coupable. Un compteur nu — « 1 élément trop large » —
+         dit qu'il y a un défaut sans dire où : mesuré le 2026-08-02, il a
+         fallu deviner deux fois avant de trouver la barre. Le nom du
+         premier fautif suffit : les suivants sont presque toujours ses
+         parents, qu'il déborde par en dessous. */
       let over = 0;
+      let qui = "";
       document.querySelectorAll("*").forEach((el) => {
         if (el.id.startsWith("PROBE")) return;
         if (getComputedStyle(el).position === "fixed") return;
-        if (el.getBoundingClientRect().width > W + 1) over += 1;
+        if (el.getBoundingClientRect().width > W + 1) {
+          over += 1;
+          if (!qui) {
+            /* Aucune espace dans le nom : les mesures sont jointes par des
+               espaces, et un nom qui en contient casserait la lecture — un
+               « 320:1 » devenait deux mesures dont une à « NaN px ». */
+            qui = (
+              el.tagName.toLowerCase() +
+              (el.className && typeof el.className === "string"
+                ? "." + el.className.trim().split(/\s+/).slice(0, 2).join(".")
+                : "") +
+              "@" +
+              Math.round(el.getBoundingClientRect().width)
+            ).replace(/\s+/g, "_");
+          }
+        }
       });
-      out.push(W + ":" + over);
+      out.push(W + ":" + over + (qui ? "|" + qui : ""));
     }
     document.documentElement.style.width = "";
 
@@ -949,11 +1048,14 @@ const SURFACES = [
       const casse = /id="PROBE-CASSE">([^<]*)</.exec(dom);
       if (!casse) return assert("atelier — mesure tiroir ouvert obtenue", false, "sonde muette");
       for (const pair of casse[1].trim().split(" ")) {
-        const [width, over] = pair.split(":");
+        const [tete, qui = ""] = pair.split("|");
+        const [width, over] = tete.split(":");
         assert(
           `casse ouverte — aucun débordement à ${width} px`,
           Number(over) === 0,
-          `${over} élément(s) trop large(s)`
+          Number(over) === 0
+            ? "0 élément(s) trop large(s)"
+            : `${over} trop large(s), à commencer par ${qui}`
         );
       }
     },
@@ -971,11 +1073,11 @@ if (!existsSync(CHROME) || !bundle) {
       measured.dom.includes(surface.marker),
       `« ${surface.marker} » attendu dans le DOM`
     );
-    for (const [width, over] of measured.widths) {
+    for (const [width, over, qui] of measured.widths) {
       assert(
         `${surface.label} — aucun débordement à ${width} px`,
         over === 0,
-        `${over} élément(s) trop large(s)`
+        over === 0 ? "0 élément(s) trop large(s)" : `${over} trop large(s), à commencer par ${qui}`
       );
     }
     assert(
@@ -1211,11 +1313,18 @@ async function measureOverflow({ label, routes, action }) {
     return null;
   }
 
+  /* « 320:1|div.pied-inner@340 » — largeur, compte, et le NOM du premier
+     fautif avec sa largeur réelle. Sans ce nom, un compteur nu dit qu'il y
+     a un défaut sans dire où. */
   const widths = found[1]
     .trim()
     .split(" ")
     .filter((pair) => !pair.startsWith("fixes:"))
-    .map((pair) => pair.split(":").map(Number));
+    .map((pair) => {
+      const [tete, qui = ""] = pair.split("|");
+      const [w, over] = tete.split(":").map(Number);
+      return [w, over, qui];
+    });
   const fixes = Number(/fixes:(\d+)/.exec(found[1])?.[1] ?? -1);
   return { dom, widths, fixes };
 }

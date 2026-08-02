@@ -194,6 +194,100 @@ for (const w of [1920, 1600, 1400, 1280, 1100, 900, 430, 390, 360, 320]) {
   await ctx.close();
 }
 
+/* ---------- 4. l'aide, le pied de page, « Nouveau prompt » ---------- */
+{
+  const { ctx, page } = await surface(1600);
+
+  /* --- le pied de page, présent dès l'accueil --- */
+  const pied = page.locator(".pied");
+  ok("le pied de page est là", await pied.count() === 1);
+  const legal = (await page.locator(".pied-legal").textContent()) || "";
+  ok("il nomme son propriétaire", legal.includes("Gabriel Bertoli"), legal.trim());
+  ok("il porte le ®", legal.includes("®"));
+  ok("il réserve les droits", /tous droits réservés/i.test(legal));
+  const secu = (await page.locator(".pied-secu").textContent()) || "";
+  ok("il porte une note de sécurité", secu.length > 100 && /navigateur/i.test(secu));
+
+  /* --- l'aide --- */
+  await page.getByRole("button", { name: "Aide — comment ça marche" }).click();
+  await page.waitForSelector(".sheet-aide");
+  const chapitres = await page.locator(".aide-chapitre").count();
+  ok("l'aide ouvre ses douze chapitres", chapitres === 12, `${chapitres}`);
+  const liens = await page.locator(".aide-lien").count();
+  ok("le sommaire les liste tous", liens === 12, `${liens}`);
+  const sections = await page.locator(".aide-section").count();
+  ok("elle détaille les huit sections du prompt", sections === 8, `${sections}`);
+  /* Le sommaire doit MENER quelque part : une ancre sans cible est un lien
+     mort qu'aucun compte d'éléments ne révèle. */
+  const cibles = await page.evaluate(() =>
+    [...document.querySelectorAll(".aide-lien")].every((a) =>
+      document.querySelector(a.getAttribute("href").replace("#", "#"))
+    )
+  );
+  ok("chaque entrée du sommaire mène à son chapitre", cibles);
+
+  /* Échap referme — c'est le premier geste qu'on essaie. */
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  ok("Échap referme l'aide", (await page.locator(".sheet-aide").count()) === 0);
+
+  /* --- « Nouveau prompt » --- */
+  await page.locator(".casse-toggle").click();
+  await page.locator(".casse-open").first().click();
+  await page.waitForSelector(".atelier-main .prompt-sheet");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
+  ok("un prompt est bien en place avant l'essai", await page.locator(".idee-repliee").isVisible());
+
+  await page.getByRole("button", { name: "Créer un nouveau prompt" }).click();
+  await page.waitForTimeout(600);
+  const apres = await page.evaluate(() => ({
+    prompt: Boolean(document.querySelector(".atelier-main .prompt-sheet")),
+    repliee: Boolean(document.querySelector(".idee-repliee")),
+    idee: document.querySelector(".atelier-main textarea")?.value ?? null,
+    manchette: document.querySelector(".atelier-main")?.textContent.includes("Bonjour") || false,
+    fil: Boolean(document.querySelector(".pupitre .turn")),
+    focus: document.activeElement?.tagName.toLowerCase() || "",
+  }));
+  ok("« Nouveau prompt » retire le prompt du marbre", !apres.prompt);
+  ok("il rouvre le composeur", !apres.repliee && apres.idee === "");
+  ok("il vide l'idée précédente", apres.idee === "", JSON.stringify(apres.idee));
+  ok("il ramène l'accueil", apres.manchette);
+  ok("il vide le fil", !apres.fil);
+  ok("et pose le curseur dans la saisie", apres.focus === "textarea", apres.focus);
+
+  /* Le prompt n'est pas perdu pour autant : il est resté dans la casse. */
+  await page.locator(".casse-toggle").click();
+  await page.waitForTimeout(350);
+  const restant = await page.locator(".cassetin").count();
+  ok("le prompt d'avant est toujours dans la casse", restant === 1, `${restant}`);
+
+  await ctx.close();
+}
+
+/* ---------- 5. la barre reste tenable une fois chargée de boutons ------- */
+for (const w of [320, 360, 430, 640, 900]) {
+  const { ctx, page } = await surface(w, 800);
+  const m = await page.evaluate(() => {
+    const barre = document.querySelector(".topbar-inner");
+    return {
+      debord: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      barreLarge: Math.round(barre.scrollWidth) - Math.round(barre.clientWidth),
+      neuf: Boolean(document.querySelector(".btn-neuf")),
+      aide: Boolean(document.querySelector(".btn-aide")),
+      compte: Boolean(document.querySelector("button.avatar")),
+    };
+  });
+  ok(`barre ${w}px — aucun débordement de page`, m.debord === 0, `${m.debord} px`);
+  ok(`barre ${w}px — la rangée elle-même ne déborde pas`, m.barreLarge <= 0, `${m.barreLarge} px`);
+  /* Les deux gestes restent atteignables à toute largeur : ils perdent
+     leur mot, jamais leur bouton. */
+  ok(`barre ${w}px — « Nouveau prompt » reste atteignable`, m.neuf);
+  ok(`barre ${w}px — l'aide reste atteignable`, m.aide);
+  ok(`barre ${w}px — le compte ouvre les réglages`, m.compte);
+  await ctx.close();
+}
+
 await browser.close();
 console.log(ko === 0 ? "\nPilotage au vert." : `\n${ko} ÉCHEC(S).`);
 process.exit(ko === 0 ? 0 : 1);

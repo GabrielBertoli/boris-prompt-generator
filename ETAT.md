@@ -67,8 +67,36 @@ jetable revenait à ne pas pouvoir rejouer cette décision. Playwright reste
 installé **hors** du dépôt (`/tmp/drive`, ou `PLAYWRIGHT_HOME`) ; le script
 le dit et sort en code 2 s'il manque.
 
-Preuves du jour : **165 assertions** locales (`npm run verify`) + **77 au
-pilotage** sur 10 paliers de 320 à 1920 px, zéro échec.
+Preuves : **165 assertions** locales + **77 au pilotage**, zéro échec.
+
+## L'aide, le pied de page, « Nouveau prompt » — 2026-08-02
+
+**Une aide en douze chapitres** (bouton « ? » de la barre), un par partie
+de l'écran, plus la méthode et la sécurité. Elle est écrite en **données**
+(`src/aide.js`) et non en balisage, pour une raison précise : une aide
+vieillit en silence et **se lit comme vraie**. Le vérificateur prouve donc
+que les huit sections qu'elle annonce sont exactement celles qu'impose
+`buildMeta()`, dans le même ordre, que le plafond cité est `HARD_LIMIT`
+relu depuis le code, que les douze chapitres attendus sont là, et qu'aucun
+mot de jargon n'a reparu dans la prose. `DECISIONS.md` § 24.
+
+**Un pied de page** : `© 2026 Gabriel Bertoli — Atelier Boris®`, les droits
+réservés, et une note de sécurité en clair. Hors de la coquille — les deux
+bords sont collants et n'ont pas de bas.
+
+**« Créer un nouveau prompt »**, dans la barre : le geste le plus courant
+n'avait pas de bouton.
+
+Cinq défauts sortis avec ces ajouts, tous corrigés (`DECISIONS.md` § 25) :
+la barre ne pouvait plus porter deux boutons de plus (dégraissage par
+paliers) ; le sigle du compte était décoratif alors qu'il devient la seule
+porte vers les réglages **et la déconnexion** sous 560 px ; le nouveau
+bouton perdait son nom accessible sous 700 px ; Échap ne fermait aucun
+panneau ; et la sonde de débordement ne nommait pas le coupable — elle le
+nomme désormais, avec sa largeur.
+
+Preuves du jour : **197 assertions** locales (`npm run verify`) + **120 au
+pilotage** (`npm run pilotage`), zéro échec.
 
 ## Les codes ont été réémis — 2026-08-02
 

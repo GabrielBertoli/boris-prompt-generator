@@ -884,6 +884,22 @@ pre {
   color: #1c0c03;
   font-family: var(--font-display);
   font-size: 15px;
+  /* Il est devenu un bouton : il doit s'annoncer comme tel au survol,
+     sinon on ne découvre jamais qu'il ouvre quelque chose. */
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+
+button.avatar:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ember) 26%, transparent);
+}
+
+button.avatar:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
 }
 
 /* ---------- modale ---------- */
@@ -910,6 +926,172 @@ pre {
   border-radius: var(--r-xl);
   box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 1);
   animation: rise 300ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/* ---------- l'aide ----------
+   Plus large que les autres feuilles : douze chapitres à hauteur de
+   lecture. Le sommaire est en tête parce qu'un panneau qui défile n'offre
+   aucun moyen d'atteindre le douzième chapitre sans passer devant onze. */
+
+.sheet-aide {
+  width: min(760px, 100%);
+  max-height: 90vh;
+  scroll-behavior: smooth;
+}
+
+.aide-sommaire {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 2px 14px;
+  margin-bottom: 30px;
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+}
+
+.aide-lien {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 5px 0;
+  font-size: 13.5px;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.aide-lien:hover {
+  color: var(--chalk);
+  border-bottom-color: var(--line);
+}
+
+.aide-lien-num {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--ember);
+}
+
+.aide-chapitre {
+  padding-top: 26px;
+  /* La feuille défile ; sans cette marge, une ancre calait le titre du
+     chapitre juste sous le bord et il arrivait déjà rogné. */
+  scroll-margin-top: 8px;
+}
+
+.aide-sert {
+  margin: 14px 0 12px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--chalk);
+}
+
+.aide-points {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.aide-points li {
+  position: relative;
+  padding-left: 18px;
+  margin-bottom: 9px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.aide-points li::before {
+  content: "—";
+  position: absolute;
+  left: 0;
+  color: var(--ember);
+}
+
+.aide-section + .aide-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.aide-section-titre {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--ember);
+}
+
+.aide-section-quoi {
+  margin-top: 5px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.aide-pied {
+  margin-top: 34px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--muted-2);
+}
+
+/* ---------- le pied de page ----------
+   Hors de la coquille : les deux panneaux de bord sont collants et n'ont
+   pas de bas. Un pied posé dans la colonne du milieu aurait été un pied
+   de colonne, pas un pied de page. */
+
+.pied {
+  border-top: 1px solid var(--line);
+  background: var(--ink-2);
+}
+
+.pied-inner {
+  width: 100%;
+  max-width: 84rem;
+  margin: 0 auto;
+  padding: 24px 20px 30px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 24px;
+}
+
+/* `flex: none` interdisait de rétrécir : la ligne légale, en chasse fixe
+   et interlettrée, réclame 436 px de large et débordait donc un écran de
+   320. Elle rétrécit et revient à la ligne — c'est du texte, il se plie. */
+.pied-legal {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* Le ® est une marque, pas une lettre : en exposant, à sa taille. */
+.pied-r {
+  font-size: 0.72em;
+  vertical-align: super;
+  line-height: 0;
+  margin-left: 1px;
+}
+
+.pied-secu {
+  flex: 1 1 320px;
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted-2);
+}
+
+.pied-lien {
+  flex: none;
+  font-size: 12px;
+}
+
+@media print {
+  .pied {
+    display: none;
+  }
 }
 
 /* ---------- notes ---------- */
@@ -1891,6 +2073,43 @@ pre {
 .casse-toggle,
 .avatar {
   flex: none;
+}
+
+/* Deux boutons de plus dans la rangée le 2026-08-02 — « Nouveau prompt »
+   et « Aide ». C'est exactement ce qui avait fait déborder la barre de
+   15 px à 320 px la veille : on les dégraisse AVANT de mesurer, et on
+   mesure ensuite. Ils gardent leur signe (« + », « ? ») à toute largeur —
+   un bouton sans libellé reste un bouton ; un bouton disparu ne l'est
+   plus, et « Nouveau prompt » est le geste le plus courant de l'atelier. */
+
+.btn-neuf,
+.btn-aide {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+@media (max-width: 900px) {
+  /* Le premier à céder est « Réglages » : il est atteignable autrement —
+     l'aide y renvoie, et rien ne s'y fait en urgence. */
+  .btn-aide-mot {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .btn-neuf-mot {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  /* Puis le mot « Réglages » cède la place au sigle du compte, qui l'ouvre
+     déjà en le touchant. */
+  .btn-reglages {
+    display: none;
+  }
 }
 
 @media (max-width: 460px) {
