@@ -164,6 +164,13 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   const [noteLoading, setNoteLoading] = useState(false);
   const [noteOuverte, setNoteOuverte] = useState(false);
 
+  /* L'idée se replie dès qu'un travail est ouvert. La manchette et les six
+     lignes du composeur poussaient l'écran de travail SOUS le pli : il
+     fallait faire défiler pour voir le prompt qu'on venait de demander, à
+     chaque fois. Repliée, l'idée reste lisible en une ligne et se rouvre
+     d'un clic — on n'a rien perdu, on a gagné le haut de la page. */
+  const [ideeOuverte, setIdeeOuverte] = useState(false);
+
   /* L'arrêt. Une génération dure des dizaines de secondes et enchaîne
      jusqu'à cinq réparations puis un jugement : sans bouton, la seule
      façon de reprendre la main était de recharger la page — et de perdre
@@ -1040,6 +1047,28 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   const noteCourante =
     note && (note.pourVersion == null || note.pourVersion === version) ? note : null;
 
+  /* ---------- l'écran de travail, et le haut de la page ----------
+
+     Dès qu'un travail est ouvert — analyse lancée, prompt en cours, prompt
+     rappelé de la casse — les trois panneaux DOIVENT commencer sous la
+     barre. Avant, la manchette (« Bonjour Gabriel », le titre en 64 px) et
+     le composeur occupaient la première page entière : le prompt qu'on
+     venait de demander naissait hors de l'écran, et il fallait faire
+     défiler pour le voir arriver. */
+  const enTravail = phase !== "idle" || Boolean(prompt);
+
+  /* Le repli seul ne suffit pas : si la page est déjà défilée quand le
+     travail s'ouvre, le haut retrouvé reste au-dessus du regard. On y
+     remonte — une seule fois, au basculement, jamais pendant qu'on lit. */
+  const travailPrecedent = useRef(false);
+  useEffect(() => {
+    if (enTravail && !travailPrecedent.current) {
+      setIdeeOuverte(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    travailPrecedent.current = enTravail;
+  }, [enTravail]);
+
   const shown = useMemo(() => {
     const needle = search.trim().toLowerCase();
     if (!needle) return library;
@@ -1283,85 +1312,151 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
         />
 
       <main className="atelier-main">
-        {/* ================= manchette ================= */}
-        <section className="rise pt-12 pb-10 sm:pt-16">
-          <div className="eyebrow mb-4">
-            But — Garde-fous — Vérificateur — Sortie
-          </div>
-          <h1 className="display text-[clamp(38px,6.6vw,64px)]">
-            Bonjour {user.name}.
-            <br />
-            Quelle boîte <em>fais-tu tourner</em> aujourd'hui&nbsp;?
-          </h1>
-          <p className="lede mt-6">
-            Décris l'idée comme à un associé. L'atelier ne pose une question que si la réponse
-            change matériellement le terrain, l'escalade ou la sortie ; le reste est tranché par
-            hypothèse et signalé.
-          </p>
-
-          <div className="mt-8 flex flex-wrap gap-2">
-            <span className="tag tag-accent">{library.length} prompt{library.length > 1 ? "s" : ""} en bibliothèque</span>
-            <span className="tag">limite {settings.charLimit} car.</span>
-            <span className={apiKey ? "tag tag-ok" : "tag tag-ko"}>
-              {usingShared ? "clé de l'atelier" : apiKey ? "ta clé" : "clé manquante"}
-            </span>
-            <span className="tag" title="Dépense API cumulée de ton compte, tous appareils confondus">
-              dépense à date {formatCost(totalCost ?? 0)}
-            </span>
-            {!libRemote && <span className="tag tag-ko">hors ligne</span>}
-          </div>
-        </section>
-
-        {/* ================= l'idée ================= */}
-        <section ref={composerRef} className="card p-6 sm:p-7">
-          <textarea
-            rows={6}
-            value={idea}
-            onChange={(e) => setIdea(e.target.value)}
-            disabled={busy}
-            placeholder={
-              "Exemple : une app d'échecs en ligne — parties en direct, classement Elo, puzzles quotidiens ; l'humain ne valide que les mises en production…\n\n" +
-              "Ou : un algo de ML qui prédit les ruptures de stock d'un e-commerce depuis l'historique de ventes, réentraîné chaque nuit, avec un tableau de bord de dérive…"
-            }
-          />
-
-          <button
-            className="link mt-4"
-            type="button"
-            onClick={() => setShowConstraints((v) => !v)}
-            disabled={busy}
-          >
-            {showConstraints ? "− Masquer les contraintes" : "+ Contraintes imposées (optionnel)"}
-          </button>
-
-          {showConstraints && (
-            <div className="mt-4">
-              <textarea
-                rows={3}
-                value={constraints}
-                onChange={(e) => setConstraints(e.target.value)}
-                disabled={busy}
-                placeholder="Technologies imposées, système d'enregistrement, actions engageantes propres au domaine, critère de sortie souhaité…"
-              />
+        {/* ================= manchette — l'accueil, et rien d'autre =======
+            Elle disparaît dès qu'un travail est ouvert. « Bonjour Gabriel »
+            en 64 px et les six lignes du composeur occupaient la première
+            page entière : le prompt qu'on venait de demander naissait donc
+            SOUS le pli, et il fallait faire défiler pour le voir arriver.
+            L'accueil a sa place au premier écran d'une session, pas
+            au-dessus de chaque prompt. */}
+        {!enTravail && (
+          <section className="rise pt-12 pb-10 sm:pt-16">
+            <div className="eyebrow mb-4">
+              But — Garde-fous — Vérificateur — Sortie
             </div>
-          )}
+            <h1 className="display text-[clamp(38px,6.6vw,64px)]">
+              Bonjour {user.name}.
+              <br />
+              Qu'est-ce que tu <em>confies</em> aujourd'hui&nbsp;?
+            </h1>
+            {/* En français courant, et testé sur ce critère : quelqu'un qui
+                n'a jamais écrit un prompt doit comprendre ce qu'il va
+                recevoir. Les mots du métier — oracle, escalade, invariants,
+                sortie verrouillée — sont ce que l'atelier ÉCRIT, pas ce
+                qu'il faut savoir pour s'en servir. */}
+            <p className="lede mt-6">
+              Raconte ce que tu veux confier, comme tu l'expliquerais à quelqu'un à qui tu
+              donnes le travail. L'atelier en écrit le <em>mandat</em> : ce qu'il doit obtenir,
+              ce qu'il n'a pas le droit de faire, à quoi on verra que c'est réussi, et quand il
+              doit s'arrêter pour te demander. Une question ne t'est posée que si la réponse
+              change vraiment le résultat.
+            </p>
 
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <button
-              className="btn btn-primary"
-              type="button"
-              onClick={analyze}
-              disabled={busy || phase === "questions"}
-            >
-              {phase === "analyzing" ? "Analyse en cours…" : "Analyser l'idée"}
-            </button>
-            {(phase === "done" || phase === "questions") && (
-              <button className="btn btn-ghost" type="button" onClick={reset} disabled={busy}>
+            <div className="mt-8 flex flex-wrap gap-2">
+              <span className="tag tag-accent">{library.length} prompt{library.length > 1 ? "s" : ""} en bibliothèque</span>
+              <span className="tag">limite {settings.charLimit} car.</span>
+              <span className={apiKey ? "tag tag-ok" : "tag tag-ko"}>
+                {usingShared ? "clé de l'atelier" : apiKey ? "ta clé" : "clé manquante"}
+              </span>
+              <span className="tag" title="Dépense API cumulée de ton compte, tous appareils confondus">
+                dépense à date {formatCost(totalCost ?? 0)}
+              </span>
+              {!libRemote && <span className="tag tag-ko">hors ligne</span>}
+            </div>
+          </section>
+        )}
+
+        {/* ================= l'idée =================
+            Repliée en une ligne pendant le travail : elle reste lisible et
+            se rouvre d'un clic. Ce n'est pas un masquage — c'est la même
+            section, le même `composerRef`, la même idée. */}
+        <section
+          ref={composerRef}
+          className={
+            enTravail
+              ? ideeOuverte
+                ? "card mt-5 p-6 sm:p-7"
+                : "card idee-repliee mt-5"
+              : "card p-6 sm:p-7"
+          }
+        >
+          {enTravail && !ideeOuverte ? (
+            <div className="idee-ligne">
+              <span className="eyebrow idee-etiquette">L'idée</span>
+              <span className="idee-extrait" title={idea}>
+                {idea.trim() || "—"}
+              </span>
+              <button
+                className="btn btn-quiet"
+                type="button"
+                onClick={() => setIdeeOuverte(true)}
+                disabled={busy}
+              >
+                Modifier
+              </button>
+              <button className="btn btn-quiet" type="button" onClick={reset} disabled={busy}>
                 Recommencer
               </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            <>
+              <textarea
+                rows={6}
+                value={idea}
+                onChange={(e) => setIdea(e.target.value)}
+                disabled={busy}
+                placeholder={
+                  "Exemple : une app d'échecs en ligne — parties en direct, classement Elo, puzzles quotidiens ; l'humain ne valide que les mises en production…\n\n" +
+                  "Ou : un algo de ML qui prédit les ruptures de stock d'un e-commerce depuis l'historique de ventes, réentraîné chaque nuit, avec un tableau de bord de dérive…"
+                }
+              />
 
+              <button
+                className="link mt-4"
+                type="button"
+                onClick={() => setShowConstraints((v) => !v)}
+                disabled={busy}
+              >
+                {showConstraints ? "− Masquer les contraintes" : "+ Contraintes imposées (optionnel)"}
+              </button>
+
+              {showConstraints && (
+                <div className="mt-4">
+                  <textarea
+                    rows={3}
+                    value={constraints}
+                    onChange={(e) => setConstraints(e.target.value)}
+                    disabled={busy}
+                    placeholder="Technologies imposées, système d'enregistrement, actions engageantes propres au domaine, critère de sortie souhaité…"
+                  />
+                </div>
+              )}
+
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={analyze}
+                  disabled={busy || phase === "questions"}
+                >
+                  {phase === "analyzing" ? "Analyse en cours…" : "Analyser l'idée"}
+                </button>
+                {enTravail && (
+                  /* « Replier l'idée », et pas « Replier » : le tiroir de
+                     la casse porte déjà un bouton « Replier ». Deux
+                     libellés identiques dans la même page ne se
+                     distinguent pas à l'oreille d'un lecteur d'écran —
+                     trouvé au pilotage, où le sélecteur en a ramené trois. */
+                  <button
+                    className="btn btn-ghost"
+                    type="button"
+                    onClick={() => setIdeeOuverte(false)}
+                  >
+                    Replier l'idée
+                  </button>
+                )}
+                {(phase === "done" || phase === "questions") && (
+                  <button className="btn btn-ghost" type="button" onClick={reset} disabled={busy}>
+                    Recommencer
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* L'erreur reste visible repliée ou dépliée : c'est la seule
+              chose de cette section qu'on ne doit jamais avoir à rouvrir
+              pour lire. */}
           {error && <p className="note note-error mt-5">{error}</p>}
         </section>
 
@@ -1406,7 +1501,13 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           </section>
         )}
 
-        {/* ================= 02 · vérificateur ================= */}
+        {/* ================= 02 · le marbre — la pièce, et rien d'autre ===
+            Le marbre ne porte plus que le prompt et les gestes qu'on peut
+            faire dessus. Tout ce qui dit l'ÉTAT du travail — la note, le
+            journal, la dépense, le chrono, le juge — est passé à l'épreuve,
+            sur le bord droit : c'est ce qu'on surveille pendant que ça
+            tourne, et le surveiller obligeait à quitter le prompt des yeux
+            puisque les deux se disputaient la même colonne. */}
         {(phase === "generating" || phase === "done") && (
           <section
             ref={resultRef}
@@ -1414,129 +1515,21 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           >
             <div className="section-head">
               <span className="section-num">02</span>
-              <span className="section-title">Ce que vaut ce prompt</span>
+              <span className="section-title">Le prompt</span>
               <span className="section-line" />
               <span className="tag tag-accent">v{version}</span>
             </div>
 
-            {/* ---- la note, à la place du compte de caractères ----
-                Le grand nombre était la longueur : la mesure exacte de la
-                seule chose qui ne dit rien de la qualité. Deux prompts de
-                3 800 caractères, l'un sans oracle et l'autre qui tient la
-                méthode, affichaient le même chiffre. La longueur n'a pas
-                disparu — elle est passée en puce, avec le reste de ce qui
-                se compte. */}
-            <div className="note-rangee">
-              <JaugeNote
-                note={noteCourante}
-                encours={noteLoading || (phase === "generating" && !prompt)}
-              />
-
-              <div className="note-flanc">
-                {noteCourante ? (
-                  <>
-                    <p className="note-mot">{bandeDe(noteCourante.note).mot}</p>
-                    {noteCourante.verdict && <p className="note-verdict">{noteCourante.verdict}</p>}
-                  </>
-                ) : (
-                  <p className="note-mot" style={{ color: "var(--muted-2)" }}>
-                    {noteLoading ? "Le juge lit le prompt…" : "Pas encore jugé."}
-                  </p>
-                )}
-
-                <div className="mono mt-3 flex flex-wrap items-center gap-2 text-[11px]">
-                  <button
-                    className="note-plus"
-                    type="button"
-                    aria-expanded={noteOuverte}
-                    title="Voir le détail de la note"
-                    onClick={() => setNoteOuverte((v) => !v)}
-                    disabled={!noteCourante}
-                  >
-                    ⋯
-                  </button>
-                  <span className={verif?.pass ? "tag tag-ok" : "tag tag-ko"}>
-                    {count} car. · limite {settings.charLimit}
-                  </span>
-                  {noteCourante?.juge && <span className="tag">juge {noteCourante.juge}</span>}
-                </div>
-              </div>
-            </div>
-
-            {/* Le détail ne s'ouvre que si on le demande : la jauge se lit
-                sans rien déplier, et six critères ouverts d'office
-                repoussaient le prompt hors de l'écran. */}
-            {noteOuverte && noteCourante && (
-              <div className="card-inset note-detail mt-5 p-5">
-                {noteCourante.criteres.map((c) => (
-                  <div key={c.cle} className="critere">
-                    <div className="critere-tete">
-                      <span className="critere-nom">{c.nom}</span>
-                      <span className="critere-barre">
-                        <span
-                          style={{
-                            width: `${((c.note ?? 0) / 10) * 100}%`,
-                            background: bandeDe(c.note ?? 0).ton,
-                          }}
-                        />
-                      </span>
-                      <span
-                        className="critere-note mono"
-                        style={{ color: c.note == null ? "var(--muted-2)" : bandeDe(c.note).ton }}
-                      >
-                        {c.note == null ? "—" : fr(c.note)}
-                      </span>
-                    </div>
-                    {c.mot && <p className="critere-mot">{c.mot}</p>}
-                  </div>
-                ))}
-                <p className="mono critere-regle">
-                  La note globale n'est pas la moyenne : elle ne dépasse pas de plus de 2 points
-                  le plus faible des critères — sinon cinq critères à 9 et un vérificateur à 2
-                  donneraient « bon prompt ».
-                </p>
-              </div>
-            )}
-
-            {/* Le compteur vit : il bouge à chaque appel, pendant la
-                génération comme à l'audit. Prompt = tous les appels du
-                modèle qui produit ; juge = ceux de l'audit. */}
-            <div className="mono mt-4 flex flex-wrap items-center gap-2 text-[11px]">
-              <span className="tag">prompt {formatCost(runCost.writer)}</span>
-              <span className="tag">juge {formatCost(runCost.judge)}</span>
-              <span className="tag tag-accent">total à date {formatCost(totalCost ?? 0)}</span>
-            </div>
-
-            {log.length > 0 && (
-              <div className="mono mt-5 text-[11.5px] leading-relaxed" style={{ color: "var(--muted)" }}>
-                {log.map((line, i) => (
-                  <div key={i}>› {line}</div>
-                ))}
-              </div>
-            )}
-
-            {/* L'arrêt est À CÔTÉ du temps écoulé, pas ailleurs : c'est la
-                ligne qu'on regarde pendant qu'on attend, et c'est là qu'on
-                décide qu'on a assez attendu. Il coupe l'appel réseau en
-                cours — donc aussi la réparation qui vient de partir et le
-                juge qui enchaîne. */}
-            {(busy || auditLoading || noteLoading) && (
-              <div className="mono mt-3 flex flex-wrap items-center gap-3 text-[11.5px]">
-                <span style={{ color: "var(--muted-2)" }}>
-                  › {elapsed} s écoulées
-                  {stream ? ` · ${countChars(stream)} caractères reçus` : " · en attente du modèle…"}
-                </span>
-                {arretable && (
-                  <button className="btn btn-quiet btn-danger" type="button" onClick={arreter}>
-                    ⏹ Arrêter
-                  </button>
-                )}
-              </div>
-            )}
-
             {/* Le texte pendant qu'il arrive. Sans lui, une réponse d'une
                 minute était indiscernable d'un blocage. */}
             {busy && stream && <pre className="prompt-sheet mt-4">{stream}</pre>}
+
+            {phase === "generating" && !stream && (
+              <p className="lede mt-4 text-[14px]">
+                Le prompt s'écrira ici, ligne à ligne. L'état de la course est à droite, sur
+                l'épreuve.
+              </p>
+            )}
 
             {phase === "done" && prompt && (
               <>
@@ -1591,51 +1584,6 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
               </>
             )}
 
-            {audit && (
-              <div className="card-inset mt-6 p-5">
-                {/* Le verdict est déjà à côté de la jauge : le répéter ici
-                    donnait deux fois la même phrase à dix centimètres
-                    d'écart. Ce panneau ne garde que ce qui appelle un
-                    GESTE — les failles, qu'on applique en une version de
-                    plus, et les hypothèses, qu'on doit connaître. */}
-                <div className="eyebrow mb-3">Ce que le juge reproche — {settings.judge}</div>
-
-                {audit.failles?.length ? (
-                  <div className="mb-4">
-                    <div className="mono mb-2 text-[10.5px] uppercase tracking-[0.2em]" style={{ color: "var(--alarm)" }}>
-                      Failles
-                    </div>
-                    {audit.failles.map((f, i) => (
-                      <p key={i} className="text-[14px] leading-relaxed" style={{ color: "var(--muted)" }}>
-                        — {f}
-                      </p>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="note note-ok mb-4">Aucune faille — rien à appliquer.</p>
-                )}
-
-                {audit.hypotheses?.length > 0 && (
-                  <div>
-                    <div className="mono mb-2 text-[10.5px] uppercase tracking-[0.2em]" style={{ color: "var(--ember)" }}>
-                      Hypothèses tranchées
-                    </div>
-                    {audit.hypotheses.map((h, i) => (
-                      <p key={i} className="text-[14px] leading-relaxed" style={{ color: "var(--muted)" }}>
-                        — {h}
-                      </p>
-                    ))}
-                  </div>
-                )}
-
-                {audit.failles?.length > 0 && (
-                  <button className="btn btn-primary mt-5" type="button" onClick={applyAudit} disabled={busy}>
-                    Appliquer l'audit → v{version + 1}
-                  </button>
-                )}
-              </div>
-            )}
-
           </section>
         )}
 
@@ -1646,6 +1594,225 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           audit.
         </footer>
       </main>
+
+      {/* ================= l'épreuve : le travail en cours, à droite =====
+
+          En typographie, l'épreuve est la feuille qu'on tire pour voir ce
+          que vaut le travail avant de le tirer pour de bon. C'est ce que
+          fait ce panneau : la note du juge, ce qu'il reproche, ce que ça
+          coûte, où en est la course, et de quoi l'arrêter.
+
+          Il tient le bord droit à demeure — comme le pupitre tient le
+          gauche — parce que c'est ce qu'on SURVEILLE pendant que ça tourne.
+          Empilé dans la colonne du milieu, il se disputait la place avec le
+          prompt : lire l'un chassait l'autre de l'écran. Sous 1400 px il n'y
+          a plus de bord à prendre, il repasse dans le flux au-dessus du
+          marbre. */}
+      <aside className="epreuve">
+        <div className="epreuve-head">
+          <span className="section-title">Travail en cours</span>
+          <span className="section-line" />
+          {enTravail && <span className="tag tag-accent">v{version}</span>}
+        </div>
+
+        <div className="epreuve-corps">
+          {!enTravail ? (
+            <p className="lede epreuve-vide">
+              Rien sur l'établi. Décris une idée à gauche, ou rappelle un prompt de la casse :
+              tout ce qui se mesure — la note du juge, la dépense, le journal de la course —
+              paraîtra ici.
+            </p>
+          ) : (
+            <>
+              {/* ---- la note, à la place du compte de caractères ----
+                  Le grand nombre était la longueur : la mesure exacte de la
+                  seule chose qui ne dit rien de la qualité. Deux prompts de
+                  3 800 caractères, l'un sans oracle et l'autre qui tient la
+                  méthode, affichaient le même chiffre. La longueur n'a pas
+                  disparu — elle est passée en puce, avec le reste de ce qui
+                  se compte. */}
+              <div className="note-rangee">
+                <JaugeNote
+                  note={noteCourante}
+                  encours={noteLoading || (phase === "generating" && !prompt)}
+                />
+
+                <div className="note-flanc">
+                  {noteCourante ? (
+                    <>
+                      <p className="note-mot">{bandeDe(noteCourante.note).mot}</p>
+                      {noteCourante.verdict && (
+                        <p className="note-verdict">{noteCourante.verdict}</p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="note-mot" style={{ color: "var(--muted-2)" }}>
+                      {noteLoading ? "Le juge lit le prompt…" : "Pas encore jugé."}
+                    </p>
+                  )}
+
+                  <div className="mono mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+                    <button
+                      className="note-plus"
+                      type="button"
+                      aria-expanded={noteOuverte}
+                      title="Voir le détail de la note"
+                      onClick={() => setNoteOuverte((v) => !v)}
+                      disabled={!noteCourante}
+                    >
+                      ⋯
+                    </button>
+                    <span className={verif?.pass ? "tag tag-ok" : "tag tag-ko"}>
+                      {count} car. · limite {settings.charLimit}
+                    </span>
+                    {noteCourante?.juge && <span className="tag">juge {noteCourante.juge}</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Le détail ne s'ouvre que si on le demande : la jauge se lit
+                  sans rien déplier, et six critères ouverts d'office
+                  poussaient le reste de l'épreuve hors de vue. */}
+              {noteOuverte && noteCourante && (
+                <div className="card-inset note-detail mt-5 p-5">
+                  {noteCourante.criteres.map((c) => (
+                    <div key={c.cle} className="critere">
+                      <div className="critere-tete">
+                        <span className="critere-nom">{c.nom}</span>
+                        <span className="critere-barre">
+                          <span
+                            style={{
+                              width: `${((c.note ?? 0) / 10) * 100}%`,
+                              background: bandeDe(c.note ?? 0).ton,
+                            }}
+                          />
+                        </span>
+                        <span
+                          className="critere-note mono"
+                          style={{ color: c.note == null ? "var(--muted-2)" : bandeDe(c.note).ton }}
+                        >
+                          {c.note == null ? "—" : fr(c.note)}
+                        </span>
+                      </div>
+                      {c.mot && <p className="critere-mot">{c.mot}</p>}
+                    </div>
+                  ))}
+                  <p className="mono critere-regle">
+                    La note globale n'est pas la moyenne : elle ne dépasse pas de plus de 2 points
+                    le plus faible des critères — sinon cinq critères à 9 et un vérificateur à 2
+                    donneraient « bon prompt ».
+                  </p>
+                </div>
+              )}
+
+              {/* Le compteur vit : il bouge à chaque appel, pendant la
+                  génération comme à l'audit. Prompt = tous les appels du
+                  modèle qui produit ; juge = ceux de l'audit. */}
+              <div className="mono mt-4 flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="tag">prompt {formatCost(runCost.writer)}</span>
+                <span className="tag">juge {formatCost(runCost.judge)}</span>
+                <span className="tag tag-accent">total à date {formatCost(totalCost ?? 0)}</span>
+              </div>
+
+              {/* L'arrêt est À CÔTÉ du temps écoulé, pas ailleurs : c'est la
+                  ligne qu'on regarde pendant qu'on attend, et c'est là qu'on
+                  décide qu'on a assez attendu. Il coupe l'appel réseau en
+                  cours — donc aussi la réparation qui vient de partir et le
+                  juge qui enchaîne. */}
+              {(busy || auditLoading || noteLoading) && (
+                <div className="mono mt-4 flex flex-wrap items-center gap-3 text-[11.5px]">
+                  <span style={{ color: "var(--muted-2)" }}>
+                    › {elapsed} s écoulées
+                    {stream
+                      ? ` · ${countChars(stream)} caractères reçus`
+                      : " · en attente du modèle…"}
+                  </span>
+                  {arretable && (
+                    <button className="btn btn-quiet btn-danger" type="button" onClick={arreter}>
+                      ⏹ Arrêter
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {log.length > 0 && (
+                <div
+                  className="mono epreuve-journal mt-4 text-[11.5px] leading-relaxed"
+                  style={{ color: "var(--muted)" }}
+                >
+                  {log.map((line, i) => (
+                    <div key={i}>› {line}</div>
+                  ))}
+                </div>
+              )}
+
+              {audit && (
+                <div className="card-inset mt-5 p-5">
+                  {/* Le verdict est déjà à côté de la jauge : le répéter ici
+                      donnait deux fois la même phrase à dix centimètres
+                      d'écart. Ce panneau ne garde que ce qui appelle un
+                      GESTE — les failles, qu'on applique en une version de
+                      plus, et les hypothèses, qu'on doit connaître. */}
+                  <div className="eyebrow mb-3">Ce que le juge reproche — {settings.judge}</div>
+
+                  {audit.failles?.length ? (
+                    <div className="mb-4">
+                      <div
+                        className="mono mb-2 text-[10.5px] uppercase tracking-[0.2em]"
+                        style={{ color: "var(--alarm)" }}
+                      >
+                        Failles
+                      </div>
+                      {audit.failles.map((f, i) => (
+                        <p
+                          key={i}
+                          className="text-[14px] leading-relaxed"
+                          style={{ color: "var(--muted)" }}
+                        >
+                          — {f}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="note note-ok mb-4">Aucune faille — rien à appliquer.</p>
+                  )}
+
+                  {audit.hypotheses?.length > 0 && (
+                    <div>
+                      <div
+                        className="mono mb-2 text-[10.5px] uppercase tracking-[0.2em]"
+                        style={{ color: "var(--ember)" }}
+                      >
+                        Hypothèses tranchées
+                      </div>
+                      {audit.hypotheses.map((h, i) => (
+                        <p
+                          key={i}
+                          className="text-[14px] leading-relaxed"
+                          style={{ color: "var(--muted)" }}
+                        >
+                          — {h}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  {audit.failles?.length > 0 && (
+                    <button
+                      className="btn btn-primary mt-5"
+                      type="button"
+                      onClick={applyAudit}
+                      disabled={busy}
+                    >
+                      Appliquer l'audit → v{version + 1}
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </aside>
       </div>
 
       {sheet === "reglages" && (

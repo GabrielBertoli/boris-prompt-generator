@@ -43,6 +43,33 @@ n'écrase pas la version en place. `DECISIONS.md` § 22.
 après qu'il l'a cherché à droite. La décision § 20 tient : deux panneaux à
 gauche ne laissaient plus de milieu au prompt, mais un seul, oui.
 
+## Trois panneaux — 2026-08-02
+
+Demandé par Gabriel sur capture. **Gauche : le fil** (discussion et
+itérations). **Centre : le prompt** et les gestes qu'on fait dessus.
+**Droite : l'épreuve** — tout ce qui se surveille : la note du juge, ce
+qu'il reproche, la dépense, le journal de la course, le chrono et le
+bouton d'arrêt.
+
+Et **l'écran de travail commence en haut** dès qu'une analyse part ou
+qu'un prompt est rappelé de la casse : la manchette d'accueil s'efface,
+l'idée se replie en une ligne (« Modifier » la rouvre). Mesuré : le prompt
+naissait au-delà de 800 px, il naît à 245.
+
+L'accueil garde le premier écran d'une session, avec une description en
+français courant — sans oracle, sans invariants, sans escalade. Motifs et
+mesures en `DECISIONS.md` § 23.
+
+**Le pilotage Playwright est entré au dépôt** : `npm run pilotage`
+(`scripts/pilotage.mjs`). C'est le seul instrument qui prouve un palier
+responsive, donc le seul qui prouve trois colonnes — le laisser en script
+jetable revenait à ne pas pouvoir rejouer cette décision. Playwright reste
+installé **hors** du dépôt (`/tmp/drive`, ou `PLAYWRIGHT_HOME`) ; le script
+le dit et sort en code 2 s'il manque.
+
+Preuves du jour : **165 assertions** locales (`npm run verify`) + **77 au
+pilotage** sur 10 paliers de 320 à 1920 px, zéro échec.
+
 ## La casse, à gauche
 
 La bibliothèque a quitté le bas de page pour devenir un panneau : **la

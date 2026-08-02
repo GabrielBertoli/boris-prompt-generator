@@ -771,6 +771,18 @@ const SURFACES = [
           const jaugeAvant = Boolean(document.querySelector(".jauge-note"));
           const chiffre = (document.querySelector(".jauge-chiffre")?.textContent || "").trim();
           const detailAvant = Boolean(document.querySelector(".note-detail"));
+
+          /* ---- les trois panneaux, et le haut de la page ----
+             Un prompt vient d'être rappelé de la casse : c'est exactement
+             le cas où l'écran de travail doit commencer sous la barre. On
+             mesure DEUX choses distinctes — que chaque chose est dans le
+             bon panneau, et qu'aucune n'est poussée sous le pli. */
+          const marbre = document.querySelector(".atelier-main");
+          const carte = document.querySelector(".atelier-main .prompt-sheet");
+          const yPrompt = carte
+            ? Math.round(carte.getBoundingClientRect().top + window.scrollY)
+            : -1;
+
           document.querySelector(".note-plus")?.click();
 
           const btn = boutons().find((b) => b.textContent.trim() === "Imprimer");
@@ -805,6 +817,22 @@ const SURFACES = [
               jauge: jaugeAvant,
               chiffre,
               detailAvant,
+              /* Trois panneaux : le fil à gauche, la pièce au centre,
+                 l'état du travail à droite. Chaque chose à sa place — et
+                 surtout, PAS aux deux. */
+              epreuve: Boolean(document.querySelector(".epreuve")),
+              epreuveTitre: (document.querySelector(".epreuve-head")?.textContent || "").trim(),
+              jaugeDansEpreuve: Boolean(document.querySelector(".epreuve .jauge-note")),
+              jaugeDansMarbre: Boolean(document.querySelector(".atelier-main .jauge-note")),
+              promptDansMarbre: Boolean(carte),
+              promptDansEpreuve: Boolean(document.querySelector(".epreuve .prompt-sheet")),
+              filDansPupitre: Boolean(document.querySelector(".pupitre .turn")),
+              filDansMarbre: Boolean(document.querySelector(".atelier-main .turn")),
+              /* Le haut de la page : manchette repliée, idée en une ligne. */
+              manchette: Boolean(marbre && marbre.textContent.includes("Bonjour")),
+              ideeRepliee: Boolean(document.querySelector(".idee-repliee")),
+              composeurOuvert: Boolean(document.querySelector(".atelier-main textarea")),
+              yPrompt,
               detailApres: Boolean(document.querySelector(".note-detail")),
               criteres: document.querySelectorAll(".note-detail .critere").length,
               repere: Boolean(document.querySelector(".jauge-note .repere")),
@@ -841,6 +869,29 @@ const SURFACES = [
       /* Tout prompt sorti de l'atelier se copie — la version en cours comme
          les antérieures. Deux tours d'atelier dans la sonde, donc deux
          boutons ; une seule version antérieure, donc une seule remise. */
+      /* ---- les trois panneaux ----
+         Chaque chose dans son panneau, et dans UN SEUL : une jauge présente
+         des deux côtés passerait « au vert » sur la seule vérification de
+         présence, alors que ce serait précisément le défaut qu'on répare. */
+      assert("l'épreuve tient le troisième panneau", r.epreuve);
+      assert("elle s'annonce comme le travail en cours", r.epreuveTitre.includes("Travail en cours"), r.epreuveTitre);
+      assert("la note du juge est à l'épreuve", r.jaugeDansEpreuve);
+      assert("et plus dans le marbre", !r.jaugeDansMarbre);
+      assert("le prompt est au marbre", r.promptDansMarbre);
+      assert("et pas à l'épreuve", !r.promptDansEpreuve);
+      assert("le fil est au pupitre", r.filDansPupitre);
+      assert("et pas au marbre", !r.filDansMarbre);
+
+      /* ---- l'écran de travail commence en haut ----
+         Un prompt vient d'être rappelé de la casse. La manchette d'accueil
+         n'a plus rien à faire là, l'idée tient en une ligne, et le prompt
+         n'est pas repoussé sous le pli. Le seuil est mesuré, pas choisi :
+         avant le repli, le prompt naissait au-delà de 800 px. */
+      assert("la manchette d'accueil s'efface pendant le travail", !r.manchette);
+      assert("l'idée est repliée en une ligne", r.ideeRepliee);
+      assert("son composeur est bien refermé", !r.composeurOuvert);
+      assert("le prompt commence en haut de la page", r.yPrompt >= 0 && r.yPrompt < 420, `${r.yPrompt} px`);
+
       /* La note : affichée d'office, dépliable à la demande. */
       assert("la jauge de la note est là sans rien demander", r.jauge);
       assert("elle porte les trois bandes du barème", r.bandes === 3, `${r.bandes} bande(s)`);

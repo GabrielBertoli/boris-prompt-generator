@@ -352,6 +352,65 @@ ligne d'état, pas un prompt, donc ni copie ni remise en place. Rien n'est
 Il est posé **à côté du temps écoulé** : c'est la ligne qu'on regarde
 pendant qu'on attend, et c'est là qu'on décide qu'on a assez attendu.
 
+## 23. Trois panneaux, et l'écran de travail en haut
+
+Demandé par Gabriel le 2026-08-02, sur capture : *« le droit montrera
+toujours le travail en cours, le centre les résultats du prompt, et le
+gauche là où se passent la discussion et les itérations. »*
+
+Le fil était déjà à gauche (§ 20) et le prompt au milieu. Ce qui manquait,
+c'est que **l'état du travail se disputait la colonne du prompt** : la
+note du juge, le journal des tentatives, la dépense, le chrono et le
+verdict étaient empilés AU-DESSUS du prompt, dans la même carte. Lire ce
+que valait le prompt chassait donc le prompt de l'écran, et regarder le
+prompt cachait la course.
+
+Ils sont séparés : le marbre (centre) ne porte plus que **la pièce et les
+gestes qu'on fait dessus** ; l'**épreuve** (droite) porte **tout ce qui se
+surveille**. Le nom vient de l'atelier : l'épreuve est la feuille qu'on
+tire pour voir ce que vaut le travail avant de le tirer pour de bon.
+
+Quatre choses qui portent le reste :
+
+- **Le seuil est à 1400 px, pas à 1100.** Mesuré : à 1100, trois colonnes
+  laissaient au prompt moins de 420 px — moins que la ligne de texte
+  qu'il contient. Entre 1100 et 1400, l'épreuve repasse **dans le flux,
+  sous le marbre**, et son placement y est explicite (`grid-column: 2`) :
+  laissée à l'automatisme de la grille, elle tombait sous le pupitre.
+- **Le pupitre couvre les deux rangées** dans cet intervalle
+  (`grid-row: 1 / span 2`). Sans cela, sa zone collante s'arrêtait au bas
+  du marbre et le fil décollait dès qu'on descendait sur l'épreuve.
+- **`height`, pas `max-height`, sur l'épreuve.** À `max-height`, le
+  panneau s'arrêtait à la hauteur de son contenu : le liseré et le fond
+  mouraient au milieu de l'écran, et le bord droit avait l'air d'une carte
+  flottante en face d'un pupitre qui va au bout.
+- **La manchette d'accueil s'efface et l'idée se replie en une ligne** dès
+  qu'un travail est ouvert — analyse lancée, prompt en cours, prompt
+  rappelé de la casse. « Bonjour Gabriel » en 64 px plus six lignes de
+  composeur occupaient la première page entière : **le prompt qu'on venait
+  de demander naissait sous le pli.** Mesuré au pilotage : il commençait
+  au-delà de 800 px, il commence à 245. Le repli seul ne suffit pas — si
+  la page est déjà défilée au moment où le travail s'ouvre, on remonte,
+  une fois, au basculement.
+
+L'accueil garde sa place au premier écran d'une session, et **sa
+description est en français courant** (demandé le même jour) : oracle,
+invariants, escalade, sortie verrouillée sont ce que l'atelier ÉCRIT, pas
+ce qu'il faut savoir pour s'en servir. Quatre assertions du pilotage
+interdisent ces mots dans la manchette.
+
+**Cette décision ne se prouve pas avec `npm run verify`.** Le harnais
+force la largeur du document ; les media queries s'évaluent sur le vrai
+viewport (§ 18). C'est pourquoi le pilotage Playwright est entré au dépôt
+(`npm run pilotage`, `scripts/pilotage.mjs`) au lieu de rester un script
+jetable : 77 assertions, 10 paliers de 320 à 1920 px, et le contrôle que
+les trois panneaux sont bien sur la MÊME ligne — sans ce contrôle de
+l'ordonnée, trois blocs empilés seraient passés au vert.
+
+Trouvé par lui, au passage : deux boutons **« Replier »** dans la même
+page — celui de la casse et celui de l'idée. Indistinguables à l'oreille
+d'un lecteur d'écran. Le second est devenu « Replier l'idée ».
+
 ---
 
 ## Reste à la main de Gabriel

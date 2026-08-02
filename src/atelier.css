@@ -1216,6 +1216,87 @@ pre {
 }
 
 /* ================================================================
+   L'ÉPREUVE — le travail en cours, sur le bord droit.
+
+   En typographie, l'épreuve est la feuille qu'on tire pour voir ce que
+   vaut le travail avant de le tirer pour de bon. Ce panneau porte la note
+   du juge, ce qu'il reproche, la dépense, le journal de la course et de
+   quoi l'arrêter — tout ce qui se SURVEILLE, et rien de ce qui se lit.
+
+   Il vit en flux tant qu'il n'y a pas de bord à prendre (sous 1400 px),
+   et se colle au bord droit au-delà. Comme le pupitre, il n'est jamais
+   démonté du document : ce qu'il contient reste atteignable au clavier
+   comme à la sonde, à toutes les largeurs.
+   ================================================================ */
+
+.epreuve {
+  order: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px 20px;
+  border-top: 1px solid var(--line);
+}
+
+.epreuve-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.epreuve-corps {
+  min-height: 0;
+}
+
+.epreuve-vide {
+  font-size: 14px;
+}
+
+/* Le journal grandit d'une ligne par tentative : sans borne, cinq
+   réparations poussaient le juge hors de vue au moment précis où il
+   répondait. */
+.epreuve-journal {
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+/* ---------- l'idée repliée ----------
+   Une ligne, pas un masquage : l'étiquette, l'idée tronquée, et de quoi
+   la rouvrir. Elle reste la même section, avec le même `composerRef`. */
+
+.idee-repliee {
+  padding: 12px 14px;
+}
+
+.idee-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.idee-etiquette {
+  flex: none;
+  margin: 0;
+}
+
+.idee-extrait {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* ================================================================
    LA COQUILLE — la casse à gauche, le marbre à droite.
 
    Au-delà de 1100 px, deux colonnes : le panneau est là en permanence,
@@ -1479,9 +1560,14 @@ pre {
     align-items: start;
   }
 
+  /* Le pupitre couvre les DEUX rangées de la colonne du milieu (le marbre,
+     puis l'épreuve encore en flux à cette largeur). Sans cela il ne
+     couvrirait que la première : sa zone collante s'arrêterait au bas du
+     marbre, et le fil décollerait dès qu'on descend sur l'épreuve. */
   .pupitre {
     order: 0;
     grid-column: 1;
+    grid-row: 1 / span 2;
     position: sticky;
     top: var(--topbar-h);
     height: calc(100vh - var(--topbar-h));
@@ -1500,15 +1586,96 @@ pre {
 
   .atelier-main {
     grid-column: 2;
+    grid-row: 1;
     padding: 0 40px;
+  }
+
+  /* Pas encore de bord à prendre : l'épreuve reste sous le marbre, dans la
+     colonne du milieu. Le placement est EXPLICITE — laissée à l'automatisme,
+     elle serait tombée sous le pupitre, en colonne 1. */
+  .epreuve {
+    grid-column: 2;
+    grid-row: 2;
+    padding: 8px 40px 24px;
+    border-top: 0;
   }
 }
 
-@media (min-width: 1500px) {
+/* ---------- au-delà de 1400 px : les TROIS panneaux ----------
+
+   Le fil à gauche, la pièce au milieu, l'épreuve à droite. Les deux bords
+   sont collants et défilent seuls ; seul le milieu emporte la page. C'est
+   la disposition d'un vrai marbre : ce qu'on dit à gauche, ce qu'on
+   fabrique au centre, ce que ça vaut à droite — et on n'a jamais à
+   quitter l'un des trois des yeux pour consulter un autre.
+
+   Le seuil est à 1400 et non 1100 : à 1100, trois colonnes laissaient au
+   prompt moins de 420 px, c'est-à-dire moins que la ligne de code qu'il
+   contient. Entre les deux, l'épreuve repasse dans le flux. */
+
+@media (min-width: 1400px) {
   .shell {
-    grid-template-columns: 420px minmax(0, 1fr);
+    grid-template-columns: 360px minmax(0, 1fr) 380px;
+  }
+
+  /* Une seule rangée désormais : les trois panneaux sont côte à côte, et
+     le pupitre n'a plus deux rangées à couvrir. */
+  .pupitre {
+    grid-row: 1;
+  }
+
+  /* `height` et non `max-height` : à `max-height`, le panneau ne descendait
+     que sur la hauteur de son contenu — le liseré et le fond s'arrêtaient
+     au milieu de l'écran et le bord droit avait l'air d'une carte flottante
+     face au pupitre, qui va au bout. Les deux bords se répondent. */
+  .epreuve {
+    order: 0;
+    grid-column: 3;
+    grid-row: 1;
+    display: flex;
+    position: sticky;
+    top: var(--topbar-h);
+    height: calc(100vh - var(--topbar-h));
+    margin: 0;
+    padding: 20px 18px;
+    background: linear-gradient(180deg, var(--surface), var(--ink-2));
+    border-left: 1px solid var(--line);
+    border-top: 0;
+    border-radius: 0;
+  }
+
+  /* Seul le corps défile : l'en-tête « Travail en cours » reste posé,
+     sinon on perd le titre du panneau dès la première ligne de journal. */
+  .epreuve-corps {
+    overflow-y: auto;
+    margin: 0 -6px;
+    padding: 2px 6px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+
+  /* Le corps défile déjà : borner le journal en plus donnait deux barres
+     de défilement imbriquées pour un même panneau. */
+  .epreuve-journal {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .atelier-main {
+    grid-column: 2;
+    padding: 0 32px;
   }
 }
+
+@media (min-width: 1700px) {
+  .shell {
+    grid-template-columns: 400px minmax(0, 1fr) 420px;
+  }
+}
+
+/* L'ancien palier « 1500 px → pupitre à 420 px » est retiré : au-dessus de
+   1400 px il n'y a plus deux colonnes à élargir, il y en a trois, et c'est
+   le palier 1700 ci-dessus qui leur donne de l'air. */
 
 @media (max-width: 640px) {
   .atelier-main {
