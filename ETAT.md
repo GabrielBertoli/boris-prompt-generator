@@ -1,12 +1,50 @@
 # État du run
 
 **EN PRODUCTION** — https://boris-prompt-generator.vercel.app
-Redéployée le **2026-08-02** sur demande de Gabriel (commit `c370bb7`) :
-**183 assertions au vert sur l'alias stable**, zéro échec, après 183
-identiques sur la preview `…-6tiwukqfe`. Le JavaScript servi est
-**byte-identique** au build local (SHA-256 `8bfbc909…`) — seul le nom de
-fichier diffère, la construction distante hache un graphe légèrement
-différent.
+
+Dernier déploiement : **2026-08-02, commit `e87cbf3`**, poussé sur
+`origin/main`, arbre propre. Vérifié sur l'alias stable avec **les deux
+instruments** : **228 assertions au harnais** (`npm run verify` avec
+`BASE_URL`) + **142 au pilotage** (`npm run pilotage`), zéro échec. Le
+JavaScript servi est **byte-identique** au build local (SHA-256
+`feaaa8c8…`) — seul le nom de fichier diffère, la construction distante
+hache un graphe légèrement différent.
+
+## Reprendre — dans cet ordre
+
+```bash
+cd "$HOME/Documents/L'Oreal/Boris-Prompt-Generator"
+npm run build && npm run verify              # 197 assertions, sans réseau d'accès
+npm run dev &                                # puis, dans un autre terminal :
+npm run pilotage                             # 142 assertions, Chrome réel, 10 paliers
+```
+
+Pour viser un déploiement :
+`BASE_URL=<url> VERIFY_USER=karl VERIFY_CODE=<Gabriel te le donne> npm run verify`
+puis `npm run pilotage -- <url>`.
+
+**Les deux instruments sont nécessaires** et ne mesurent pas la même chose :
+le harnais ne peut exercer AUCUN palier responsive (§ 18), donc ni les trois
+panneaux, ni « tout tient dans l'écran ». Le skill `.claude/skills/verify/`
+dit lequel prouve quoi.
+
+## Journée du 2026-08-02 — ce qui a été livré
+
+Six commits, tous en production et poussés :
+
+| Commit | Ce qu'il apporte |
+|---|---|
+| `c370bb7` | la note du juge en tête de carte, le bouton ⏹ Arrêter |
+| `ee4a44f` | mise en ligne (les deux chantiers dormaient non déployés) |
+| `f01c4f3` | trois panneaux, l'écran de travail collé en haut |
+| `29cfbf1` | les codes sortent du dépôt public, garde-fou contre la récidive |
+| `5c865a1` | l'aide en douze chapitres, le pied de page, « Nouveau prompt » |
+| `e87cbf3` | tout tient dans l'écran au-delà de 1400 px |
+
+**Rien n'est en cours.** Aucun fichier modifié, aucun chantier à moitié
+fait, aucun processus en fond. Le seul travail ouvert n'appartient pas à
+l'agent : l'envoi du mail de réinitialisation, suspendu à une clé Resend de
+la main de Gabriel (§ « Ce qui reste ouvert »).
 
 **La leçon du jour, et elle a coûté une matinée à Gabriel : le vert local
 ne met rien en ligne.** Deux chantiers finis et vérifiés — la note du juge,

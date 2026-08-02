@@ -31,11 +31,22 @@ n'apparaît qu'à 320 px lui est donc invisible.
 Le Chrome de la sonde rate parfois son délai de 60 s quand d'autres
 instances tournent. `pkill -f "Google Chrome.*headless"` puis rejouer.
 
-## 2. Le pilotage réel — Playwright
+## 2. Le pilotage réel — `npm run pilotage`
 
 C'est le seul moyen d'exercer les paliers responsive, et le seul qui
-prouve un parcours au clic. Playwright n'est pas une dépendance du dépôt :
-l'installer à côté.
+prouve un parcours au clic. **Il est entré au dépôt le 2026-08-02**
+(`scripts/pilotage.mjs`, 142 assertions) : il prouve les trois panneaux,
+« tout tient dans l'écran », l'aide, le pied de page et « Nouveau prompt »
+— rien de tout cela n'est visible du harnais.
+
+```bash
+npm run dev            # dans un autre terminal
+npm run pilotage       # http://localhost:5173
+npm run pilotage -- https://…vercel.app     # ou un déploiement
+```
+
+Playwright n'est pas une dépendance du dépôt : l'installer à côté (le
+script sort en code 2 avec la marche à suivre s'il manque).
 
 ```bash
 mkdir -p /tmp/drive && cd /tmp/drive && npm init -y && npm i playwright
