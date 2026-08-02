@@ -16,6 +16,7 @@ export async function runVerifiedGeneration({ ask, baseConvo, instruction, limit
   let text = (await ask(convo)).trim();
   let check = verifyPrompt(text, limit);
   let attempt = 1;
+  const tries = [{ text, check }];
   report(onLog, attempt, check);
 
   while (!check.pass && attempt < MAX_ATTEMPTS) {
@@ -24,11 +25,29 @@ export async function runVerifiedGeneration({ ask, baseConvo, instruction, limit
     convo.push({ role: "user", content: repairInstruction(check, limit, attempt) });
     text = (await ask(convo)).trim();
     check = verifyPrompt(text, limit);
+    tries.push({ text, check });
     report(onLog, attempt, check);
   }
 
-  convo.push({ role: "assistant", content: text });
-  return { text, check, convo, attempts: attempt };
+  /* Ce qu'on rend n'est pas la DERNIÈRE tentative : c'est la meilleure.
+     Chaque serrage est un coup de dé — rien ne garantit que le cinquième a
+     fait mieux que le troisième, et rendre le dernier revenait à jeter un
+     texte plus court déjà obtenu et payé. */
+  const best = bestOf(tries);
+  convo.push({ role: "assistant", content: best.text });
+  return { text: best.text, check: best.check, convo, attempts: attempt };
+}
+
+/* La meilleure des tentatives : une au vert s'il y en a une ; sinon la plus
+   COURTE parmi celles dont la structure tient (huit sections, # SORTIE
+   présente) — raccourcir se demande encore, reconstruire une sortie tronquée
+   non ; sinon, faute de mieux, la plus courte. */
+function bestOf(tries) {
+  const green = tries.find((t) => t.check.pass);
+  if (green) return green;
+  const sound = tries.filter((t) => t.check.fails.every((f) => f.startsWith("longueur")));
+  const pool = sound.length ? sound : tries;
+  return pool.reduce((a, b) => (b.check.count < a.check.count ? b : a));
 }
 
 /* La réparation chiffre, et elle SERRE à chaque tour.

@@ -9,9 +9,11 @@ import {
 import {
   DEFAULT_JUDGE,
   DEFAULT_WRITER,
+  HARD_LIMIT,
   MODELS,
   baseConvoFor,
   buildMeta,
+  capLimit,
   correctionInstruction,
   costOf,
   countChars,
@@ -64,9 +66,10 @@ function loadSettings() {
     return {
       writer: MODELS.some((m) => m.id === parsed.writer) ? parsed.writer : DEFAULTS.writer,
       judge: MODELS.some((m) => m.id === parsed.judge) ? parsed.judge : DEFAULTS.judge,
-      charLimit: Number.isFinite(stored)
-        ? Math.min(8000, Math.max(1500, stored))
-        : DEFAULTS.charLimit,
+      /* Un réglage enregistré AVANT le plafond peut valoir 8000 : il est
+         ramené au plafond à la relecture, sinon l'écran continuerait
+         d'annoncer une limite que le vérificateur n'applique plus. */
+      charLimit: Number.isFinite(stored) ? capLimit(stored) : DEFAULTS.charLimit,
     };
   } catch {
     return DEFAULTS;
@@ -145,6 +148,9 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   const [libNote, setLibNote] = useState("");
   const [stream, setStream] = useState(""); // texte en cours de réception
   const [elapsed, setElapsed] = useState(0);
+  /* Quel tour du fil vient d'être copié — l'accusé « Copié ✓ » se pose sur
+     ce bouton-là, pas sur les autres. */
+  const [copiedTurn, setCopiedTurn] = useState(null);
 
   /* Le fil de correction : ce qu'on a demandé, ce qui est sorti. Il vit
      dans l'entrée de bibliothèque — donc dans le profil de son
@@ -294,6 +300,18 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
       onLog: pushLog,
     });
 
+  /* Rien au-dessus du plafond ne quitte l'atelier.
+     Un prompt trop long n'est pas « presque bon » : donné à l'agent auquel
+     il est destiné, il est refusé. L'afficher avec un avertissement — ce
+     que faisait l'atelier — revenait à livrer un produit cassé en s'en
+     excusant, et le bouton « Copier le prompt » juste dessous invitait à
+     s'en servir. On garde donc la version précédente, et on dit pourquoi. */
+  const tropLongNote = (check) =>
+    `Prompt refusé : ${check.count} caractères pour un plafond de ${check.limit}. ` +
+    `L'atelier a resserré ${MAX_ATTEMPTS} fois sans y arriver, donc il n'affiche rien — ` +
+    "un prompt hors limite est refusé par l'agent à qui tu le donnes. " +
+    "Relance, ou resserre l'idée de départ : une idée très large produit un prompt long.";
+
   /* ---------- phase 1 : analyse et questions ---------- */
   const analyze = async () => {
     if (!apiKey) {
@@ -379,9 +397,19 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     try {
       const res = await generateVerified(baseHistory, instruction);
       setHistory(res.convo);
-      setPrompt(res.text);
       setVerif(res.check);
       setPhase("done");
+
+      /* Le compteur, la jauge et le journal des tentatives restent à
+         l'écran : c'est la preuve de ce qui s'est passé. Seule la feuille
+         du prompt manque, et l'erreur dit pourquoi. */
+      if (res.check.over) {
+        setPrompt("");
+        setError(tropLongNote(res.check));
+        return;
+      }
+
+      setPrompt(res.text);
       if (!res.check.pass) {
         setError(
           `Le vérificateur n'est pas au vert après ${MAX_ATTEMPTS} tentatives. Le prompt est affiché — corrige à la main ou relance.`
@@ -445,10 +473,31 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
         `vise ${targetWindow(settings.charLimit).lo} à ${targetWindow(settings.charLimit).hi}.`;
       const res = await generateVerified(history, instruction);
       setHistory(res.convo);
-      setPrompt(res.text);
       setVerif(res.check);
-      setVersion(nextVersion);
       setPhase("done");
+
+      /* Trop long : la v en vigueur reste en place, et le fil garde la
+         trace de la tentative — mais SANS son texte. `compacted` est déjà
+         la marque des tours dont le texte n'est pas là : ni copie, ni
+         remise en place, donc aucun moyen de récupérer par la bande un
+         prompt que l'atelier vient de refuser. */
+      if (res.check.over) {
+        setChat(
+          appendTurn(withDemand, {
+            role: "atelier",
+            text: `Refusé — ${res.check.count} caractères pour un plafond de ${res.check.limit}. La v${version} reste en place.`,
+            version,
+            count: res.check.count,
+            pass: false,
+            compacted: true,
+          })
+        );
+        setError(tropLongNote(res.check));
+        return;
+      }
+
+      setPrompt(res.text);
+      setVersion(nextVersion);
 
       const full = appendTurn(withDemand, {
         role: "atelier",
@@ -567,10 +616,28 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
       const res = await generateVerified(base, correctionInstruction(asked, settings.charLimit));
 
       setHistory(res.convo);
-      setPrompt(res.text);
       setVerif(res.check);
-      setVersion(nextVersion);
       setPhase("done");
+
+      /* Même règle qu'à l'audit : la correction trop longue n'écrase pas la
+         version en vigueur, et son texte n'entre pas dans le fil. */
+      if (res.check.over) {
+        setChat(
+          appendTurn(withDemand, {
+            role: "atelier",
+            text: `Refusé — ${res.check.count} caractères pour un plafond de ${res.check.limit}. La v${version} reste en place.`,
+            version,
+            count: res.check.count,
+            pass: false,
+            compacted: true,
+          })
+        );
+        setError(tropLongNote(res.check));
+        return;
+      }
+
+      setPrompt(res.text);
+      setVersion(nextVersion);
 
       const full = appendTurn(withDemand, {
         role: "atelier",
@@ -853,6 +920,138 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
       </div>
 
       <div className={casseOpen ? "shell shell-open" : "shell"}>
+        {/* ================= le pupitre : le fil, à demeure à gauche =======
+            Le fil a quitté le marbre le 2026-08-02. Une correction est un
+            dialogue qui dure, le prompt est la pièce qu'on regarde : les
+            empiler obligeait à faire défiler toute la page pour relire ce
+            qu'on venait de demander, et le prompt disparaissait de l'écran
+            au moment précis où on écrivait ce qu'il fallait y changer.
+            La casse, elle, est redevenue un tiroir (bouton ☰ en haut) :
+            deux panneaux permanents à gauche, il n'y avait plus de milieu.
+            Chaque génération a son fil, enregistré dans l'entrée de
+            bibliothèque — donc dans le profil de son propriétaire, et il
+            le suit d'un appareil à l'autre. */}
+        <aside className="pupitre thread">
+          <div className="pupitre-head">
+            <span className="section-title">Fil de correction</span>
+            <span className="section-line" />
+            {prompt && <span className="tag tag-accent">v{version}</span>}
+          </div>
+
+          {!prompt ? (
+            <p className="lede pupitre-vide">
+              Le fil s'ouvre dès qu'un prompt est sur le marbre. Tu y demandes les changements
+              en français ; l'atelier régénère le prompt entier, le mesure, et garde chaque
+              version.
+            </p>
+          ) : (
+            <>
+              <div className="pupitre-corps">
+                {chat.length === 0 ? (
+                  <p className="lede text-[14px]">
+                    Dis ce qu'il faut changer, en français : l'atelier régénère le prompt entier,
+                    le mesure, et garde la trace. Tout le fil est enregistré chez toi.
+                  </p>
+                ) : (
+                  chat.map((turn, i) => {
+                    /* Le dernier tour de l'atelier EST le prompt du marbre :
+                       le réécrire ici le montrerait deux fois. On n'en garde
+                       que la ligne d'état, qui renvoie à la feuille. */
+                    const courant = turn.role === "atelier" && turn.text === prompt;
+                    return (
+                      <div
+                        key={i}
+                        className={turn.role === "moi" ? "turn turn-me" : "turn turn-shop"}
+                      >
+                        <div className="turn-head">
+                          <span>{turn.role === "moi" ? "Toi" : "Atelier"}</span>
+                          {turn.version ? <span className="tag">v{turn.version}</span> : null}
+                          {turn.count != null ? (
+                            <span className={turn.pass === false ? "tag tag-ko" : "tag"}>
+                              {turn.count} car.
+                            </span>
+                          ) : null}
+                          <span>{formatDate(turn.at)}</span>
+                        </div>
+
+                        {courant ? (
+                          <p className="turn-courant mono">
+                            Version en cours — c'est le prompt sur le marbre.
+                          </p>
+                        ) : (
+                          <pre className="turn-text">{turn.text}</pre>
+                        )}
+
+                        {/* Tout prompt sorti de l'atelier se copie, y
+                            compris la version en cours et les versions
+                            antérieures du fil : un texte qu'on ne peut
+                            que sélectionner à la souris n'est pas livré.
+                            `canRestore` est la bonne garde — un tour
+                            compacté ne porte plus son texte mais une
+                            note, et la copier serait mentir. */}
+                        {canRestore(turn) && (
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <button
+                              className="btn btn-quiet"
+                              type="button"
+                              onClick={async () => {
+                                if (await copy(turn.text)) {
+                                  setCopiedTurn(i);
+                                  setTimeout(() => setCopiedTurn(null), 2000);
+                                }
+                              }}
+                            >
+                              {copiedTurn === i ? "Copié ✓" : "Copier ce prompt"}
+                            </button>
+                            {!courant && (
+                              <button
+                                className="btn btn-quiet"
+                                type="button"
+                                onClick={() => restoreTurn(turn)}
+                                disabled={busy}
+                              >
+                                Remettre cette version
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="pupitre-pied">
+                <textarea
+                  rows={3}
+                  value={demand}
+                  onChange={(e) => setDemand(e.target.value)}
+                  placeholder="Ex. : durcis l'escalade, cite le nom du dépôt dans TON PRODUIT, allège la VÉRIFICATION…"
+                  /* Entrée+Cmd (ou Ctrl) envoie : la touche Entrée seule doit
+                     rester libre, une consigne tient souvent en trois lignes. */
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendCorrection();
+                  }}
+                />
+
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={sendCorrection}
+                    disabled={busy || !demand.trim()}
+                  >
+                    {busy ? "En cours…" : `Corriger → v${version + 1}`}
+                  </button>
+                  <span className="mono text-[11px]" style={{ color: "var(--muted-2)" }}>
+                    ⌘/Ctrl + Entrée
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+        </aside>
+
         <Casse
           items={shown}
           total={library.length}
@@ -1181,98 +1380,6 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
               </div>
             )}
 
-            {/* ---- le fil de correction ----
-                Chaque génération a le sien. Il est enregistré dans l'entrée
-                de bibliothèque, donc dans le profil de son propriétaire, et
-                le suit d'un appareil à l'autre. */}
-            {prompt && (
-              <div className="thread mt-7">
-                <div className="section-head mb-4">
-                  <span className="section-title">Fil de correction</span>
-                  <span className="section-line" />
-                  <span className="tag tag-accent">v{version}</span>
-                </div>
-
-                {chat.length === 0 ? (
-                  <p className="lede mb-4 text-[14.5px]">
-                    Dis ce qu'il faut changer, en français : l'atelier régénère le prompt entier,
-                    le mesure, et garde la trace. Tout le fil est enregistré chez toi.
-                  </p>
-                ) : (
-                  <div className="mb-4">
-                    {chat.map((turn, i) => {
-                      /* Le dernier tour de l'atelier EST le prompt affiché
-                         plus haut : le réécrire ici le montrerait deux fois.
-                         On n'en garde que la ligne d'état, qui renvoie à la
-                         feuille. */
-                      const courant = turn.role === "atelier" && turn.text === prompt;
-                      return (
-                        <div
-                          key={i}
-                          className={turn.role === "moi" ? "turn turn-me" : "turn turn-shop"}
-                        >
-                          <div className="turn-head">
-                            <span>{turn.role === "moi" ? "Toi" : "Atelier"}</span>
-                            {turn.version ? <span className="tag">v{turn.version}</span> : null}
-                            {turn.count != null ? (
-                              <span className={turn.pass === false ? "tag tag-ko" : "tag"}>
-                                {turn.count} car.
-                              </span>
-                            ) : null}
-                            <span>{formatDate(turn.at)}</span>
-                          </div>
-
-                          {courant ? (
-                            <p className="turn-courant mono">
-                              Version en cours — c'est le prompt affiché ci-dessus.
-                            </p>
-                          ) : (
-                            <pre className="turn-text">{turn.text}</pre>
-                          )}
-
-                          {canRestore(turn) && !courant && (
-                            <button
-                              className="btn btn-quiet mt-2"
-                              type="button"
-                              onClick={() => restoreTurn(turn)}
-                              disabled={busy}
-                            >
-                              Remettre cette version
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <textarea
-                  rows={3}
-                  value={demand}
-                  onChange={(e) => setDemand(e.target.value)}
-                  placeholder="Ex. : durcis l'escalade, cite le nom du dépôt dans TON PRODUIT, allège la VÉRIFICATION…"
-                  /* Entrée+Cmd (ou Ctrl) envoie : la touche Entrée seule doit
-                     rester libre, une consigne tient souvent en trois lignes. */
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendCorrection();
-                  }}
-                />
-
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <button
-                    className="btn btn-primary"
-                    type="button"
-                    onClick={sendCorrection}
-                    disabled={busy || !demand.trim()}
-                  >
-                    {busy ? "En cours…" : `Corriger → v${version + 1}`}
-                  </button>
-                  <span className="mono text-[11px]" style={{ color: "var(--muted-2)" }}>
-                    ⌘/Ctrl + Entrée
-                  </span>
-                </div>
-              </div>
-            )}
           </section>
         )}
 
@@ -1795,16 +1902,16 @@ function SettingsSheet({
           id="limit"
           type="number"
           min={1500}
-          max={8000}
-          step={100}
+          max={HARD_LIMIT}
+          step={50}
           value={settings.charLimit}
-          onChange={(e) =>
-            setSettings({
-              ...settings,
-              charLimit: Math.min(8000, Math.max(1500, Number(e.target.value) || 3000)),
-            })
-          }
+          onChange={(e) => setSettings({ ...settings, charLimit: capLimit(e.target.value) })}
         />
+        <p className="lede mt-2 text-[13px]">
+          Ce réglage descend, il ne monte pas : {HARD_LIMIT} caractères est un plafond dur.
+          Il montait à 8000, et le vérificateur comparait à ce nombre-là — un prompt de plus
+          de 4000 caractères en sortait « au vert ».
+        </p>
 
         {/* ---------- compte ---------- */}
         <div className="section-head mt-8">
@@ -1880,6 +1987,7 @@ function SettingsSheet({
 function EditorSheet({ draft, setDraft, onSave, onClose }) {
   const length = countChars(draft.prompt);
   const check = verifyPrompt(draft.prompt, draft.limit || 3000);
+  const [copiedDraft, setCopiedDraft] = useState(false);
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
@@ -1924,6 +2032,22 @@ function EditorSheet({ draft, setDraft, onSave, onClose }) {
         <div className="mt-6 flex flex-wrap gap-3">
           <button className="btn btn-primary" type="button" onClick={onSave} disabled={!draft.prompt.trim()}>
             Enregistrer
+          </button>
+          {/* Le prompt est là, sous les yeux : il se copie d'ici aussi,
+              tel qu'il est à l'écran — modifications comprises, avant
+              même de les enregistrer. */}
+          <button
+            className="btn btn-ghost"
+            type="button"
+            disabled={!draft.prompt.trim()}
+            onClick={async () => {
+              if (await copy(draft.prompt)) {
+                setCopiedDraft(true);
+                setTimeout(() => setCopiedDraft(false), 2000);
+              }
+            }}
+          >
+            {copiedDraft ? "Copié ✓" : "Copier"}
           </button>
           <button className="btn btn-ghost" type="button" onClick={onClose}>
             Annuler

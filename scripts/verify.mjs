@@ -150,6 +150,73 @@ section("Bibliothèque — renommer, dupliquer, exporter");
   );
 }
 
+/* ---------- 1 bis 2. le plafond de longueur ----------
+   Mesuré le 2026-08-02 : un prompt de plus de 4000 caractères est sorti « au
+   vert » parce que le curseur des réglages montait à 8000. Les assertions
+   ci-dessous portent sur le code qui mesure, pas sur le curseur : c'est la
+   seule façon qu'elles tiennent quand quelqu'un rouvrira le réglage. */
+
+section("Plafond de longueur");
+
+{
+  const { HARD_LIMIT, capLimit, verifyPrompt } = await import("../src/meta.js");
+  const { runVerifiedGeneration } = await import("../src/generate.js");
+
+  assert("le plafond vaut 3950", HARD_LIMIT === 3950, `${HARD_LIMIT}`);
+  assert("une limite au-dessus est rabattue", capLimit(8000) === HARD_LIMIT, `${capLimit(8000)}`);
+  assert("une limite en dessous est gardée", capLimit(3000) === 3000);
+  assert("une limite absurde retombe sur un plancher", capLimit(-5) === 1500, `${capLimit(-5)}`);
+  assert("une limite illisible ne devient pas Infinity", capLimit("abc") === 3000, `${capLimit("abc")}`);
+
+  const long = "# QUI TU ES\n" + "x".repeat(4200) + "\n# SORTIE\nSinon tu continues.";
+  const surLimite = verifyPrompt(long, 8000);
+  assert("un prompt de 4200 caractères échoue MÊME sous une limite de 8000", !surLimite.pass);
+  assert("et il est marqué hors plafond", surLimite.over === true);
+  assert("la limite rendue est le plafond, pas le réglage", surLimite.limit === HARD_LIMIT, `${surLimite.limit}`);
+
+  const court = "# QUI TU ES\nsonde\n# SORTIE\nSinon tu continues.";
+  assert("un prompt court passe", verifyPrompt(court, 3900).pass);
+  assert("et n'est pas marqué hors plafond", verifyPrompt(court, 3900).over === false);
+
+  /* Une faute de STRUCTURE n'est pas un dépassement : elle se répare à la
+     main, et l'atelier a le droit d'afficher le prompt. Les deux drapeaux
+     doivent donc se distinguer. */
+  const tronque = "# QUI TU ES\nsonde, sans la dernière section.";
+  assert("une sortie tronquée échoue", !verifyPrompt(tronque, 3900).pass);
+  assert("sans être un dépassement", verifyPrompt(tronque, 3900).over === false);
+
+  /* Ce que rend la boucle quand rien ne passe : la MEILLEURE tentative, pas
+     la dernière. On lui sert cinq réponses de longueurs décroissantes puis
+     une remontée — la 4ᵉ est la plus courte, c'est elle qu'on doit revoir. */
+  const tailles = [4600, 4400, 4200, 4000, 4300];
+  const servis = [];
+  let appel = 0;
+  const faux = await runVerifiedGeneration({
+    ask: async () => {
+      const n = tailles[Math.min(appel++, tailles.length - 1)];
+      const t = "# QUI TU ES\n" + "x".repeat(n - 40) + "\n# SORTIE\nSinon tu continues.";
+      servis.push(t);
+      return t;
+    },
+    baseConvo: [],
+    instruction: "peu importe",
+    limit: 3900,
+  });
+  const plusCourt = Math.min(...servis.map((t) => [...t].length));
+  const dernier = [...servis[servis.length - 1]].length;
+  assert("cinq tentatives ont été faites", appel === 5, `${appel} appel(s)`);
+  assert(
+    "la boucle rend la plus courte, pas la dernière",
+    faux.check.count === plusCourt && plusCourt !== dernier,
+    `rendu ${faux.check.count}, plus court ${plusCourt}, dernier ${dernier}`
+  );
+  assert("et elle la rend marquée hors plafond", faux.check.over === true);
+  assert(
+    "le dernier tour de la conversation porte ce texte-là",
+    faux.convo[faux.convo.length - 1].content === faux.text
+  );
+}
+
 /* ---------- 1 ter. le fil de correction ---------- */
 
 section("Fil de correction");
@@ -459,6 +526,18 @@ const CARTE_SONDE = {
   limit: 3900,
   version: 2,
   chat: [
+    /* Une version ANTÉRIEURE, celle qu'on ne peut plus lire ailleurs que
+       dans le fil : c'est elle qui n'avait aucun bouton copier. Son jeton
+       est distinct de celui de la version en cours — copier le mauvais
+       texte est exactement la panne à surveiller. */
+    {
+      role: "atelier",
+      text: "# QUI TU ES\nsonde ANCIENNEVERSION\n# SORTIE\nSinon tu continues.",
+      at: "2026-08-01T09:59:00.000Z",
+      version: 1,
+      count: 57,
+      pass: true,
+    },
     { role: "moi", text: "durcis l'escalade", at: "2026-08-01T10:00:00.000Z" },
     {
       role: "atelier",
@@ -519,6 +598,19 @@ const SURFACES = [
       window.print = () => { window.__printed = (window.__printed || 0) + 1; };
       const boutons = () => [...document.querySelectorAll("button")];
 
+      /* Le presse-papiers est remplacé AVANT l'application : sans cela on
+         saurait qu'un bouton existe, pas ce qu'il dépose. */
+      window.__copie = "";
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: (t) => {
+            window.__copie = t;
+            return Promise.resolve();
+          },
+        },
+      });
+
       setTimeout(() => {
         document.querySelector(".casse-toggle")?.click();
         document.querySelector(".casse-more")?.click();
@@ -532,12 +624,27 @@ const SURFACES = [
         setTimeout(() => {
           window.__mesure("PROBE");
 
+          /* Le premier bouton copier du fil est celui de la version
+             ANTÉRIEURE : on le presse pour lire ce qui part vraiment. */
+          const filBtns = [...document.querySelectorAll(".pupitre button")];
+          const copieBtns = filBtns.filter((b) => b.textContent.trim().startsWith("Copier"));
+          const remises = filBtns.filter(
+            (b) => b.textContent.trim() === "Remettre cette version"
+          ).length;
+          copieBtns[0]?.click();
+
           const btn = boutons().find((b) => b.textContent.trim() === "Imprimer");
           if (btn) btn.click();
 
           setTimeout(() => {
             const sheet = document.querySelector(".print-only");
-            const fil = document.querySelector(".thread");
+            /* Le pupitre existe TOUJOURS — c'est le bord gauche. Ce qui dit
+               qu'un prompt est bien revenu sur le marbre, c'est son corps :
+               il n'est monté que lorsqu'il y a un prompt. Mesurer la
+               présence du pupitre aurait rendu l'assertion vraie même sans
+               rien avoir ouvert. */
+            const pupitre = document.querySelector(".pupitre");
+            const fil = document.querySelector(".pupitre-corps");
             const out = document.createElement("pre");
             out.id = "PRINT";
             out.textContent = JSON.stringify({
@@ -549,12 +656,16 @@ const SURFACES = [
               fil: Boolean(fil),
               tours: fil ? fil.querySelectorAll(".turn").length : 0,
               demande: Boolean(fil && fil.textContent.includes("durcis l'escalade")),
-              saisie: Boolean(fil && fil.querySelector("textarea")),
+              saisie: Boolean(pupitre && pupitre.querySelector("textarea")),
               cassetins: document.querySelectorAll(".cassetin").length,
               gestes: Boolean(document.querySelector(".cassetin-acts")),
               feuilles: [...document.querySelectorAll(".prompt-sheet")]
                 .filter((el) => el.textContent.includes("JETONPROMPT")).length,
-              filRepete: Boolean(fil && fil.textContent.includes("JETONPROMPT")),
+              filRepete: Boolean(pupitre && pupitre.textContent.includes("JETONPROMPT")),
+              copies: copieBtns.length,
+              remises,
+              copieAncienne: (window.__copie || "").includes("ANCIENNEVERSION"),
+              copieCourante: (window.__copie || "").includes("JETONPROMPT"),
             });
             document.body.appendChild(out);
           }, 400);
@@ -575,9 +686,17 @@ const SURFACES = [
       assert("la casse tient ses cassetins", r.cassetins === 1, `${r.cassetins}`);
       assert("« ⋯ » déplie les gestes du cassetin", r.gestes);
       assert("ouvrir un cassetin remet le prompt sur le marbre", r.fil);
-      assert("les tours du fil sont affichés", r.tours === 2, `${r.tours} tour(s)`);
+      assert("les tours du fil sont affichés", r.tours === 3, `${r.tours} tour(s)`);
       assert("la demande enregistrée est relue", r.demande);
       assert("la zone de correction est là", r.saisie);
+
+      /* Tout prompt sorti de l'atelier se copie — la version en cours comme
+         les antérieures. Deux tours d'atelier dans la sonde, donc deux
+         boutons ; une seule version antérieure, donc une seule remise. */
+      assert("chaque prompt du fil porte son bouton copier", r.copies === 2, `${r.copies} bouton(s)`);
+      assert("seule une version antérieure se remet", r.remises === 1, `${r.remises} bouton(s)`);
+      assert("copier un tour copie CE tour", r.copieAncienne);
+      assert("et surtout pas la version en cours", !r.copieCourante);
 
       /* Le prompt s'affiche UNE fois. Le dernier tour du fil porte le même
          texte que la feuille : le répéter le montrait deux fois. */

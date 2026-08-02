@@ -1,8 +1,11 @@
 /* ================================================================
    MÉTA-PROMPT — méthode Boris.
    Le dépôt est la source de vérité : ce fichier est le seul endroit
-   où vit la méthode. Le prompt de référence est repris tel quel de
-   la session Odoo agentique (2951 caractères).
+   où vit la méthode. Le prompt de référence vient de la session Odoo
+   agentique (2879 caractères) ; seule sa ligne « Modèles » a bougé —
+   le routage y est désormais une règle d'escalade (Sonnet produit,
+   Fable tranche, un cran au-dessus après un échec VÉRIFIÉ) et non un
+   catalogue de modèles, qui vieillit à chaque sortie.
    ================================================================ */
 
 export const PROMPT_REFERENCE = `# QUI TU ES
@@ -24,7 +27,7 @@ Pas de liste d'agents planifiée. Tu fais tourner l'entreprise et tu regardes o�
 
 # ENVIRONNEMENT
 Personne ne répondra à une question : tu tranches, tu écris l'hypothèse dans le dépôt, tu continues. L'état du run vit dans le dépôt, pas dans ton contexte : tu reprends après une coupure. Supprime au fil de l'eau code mort et instructions devenues inutiles.
-Modèles : Fable 5 pour ce qui tranche — architecture, arbitrages, jugements de vérification ; Opus 5 ou Sonnet 5 pour ce qui produit, avec l'effort que tu estimes nécessaire. En cas de doute, le fort.
+Modèles : Sonnet produit, Fable tranche. Échec vérifié → un cran au-dessus. Sous-agents pareil. Rien à consigner sauf dérogation.
 
 # VÉRIFICATION
 Vérificateur avant construction. Un scénario passe quand tu l'affirmes sur l'état d'Odoo : enregistrement créé, montants et TVA justes, écriture équilibrée, statut attendu, ligne d'audit par action. Après chaque agent construit, rejoue la chaîne entière, pas seulement ton ajout.
@@ -53,7 +56,7 @@ export function buildMeta(limit) {
     "2. # TON PRODUIT — le terrain : ce qui est construit, le système d'enregistrement, le socle. Si une contrainte technologique est imposée : porte de sortie ('ou aucun si plus simple sert mieux'), décision par essai réel et pas par la doc, clause anti-cage (le socle fournit la plomberie, jamais les workflows des agents), décision motivée écrite dans le dépôt.\n" +
     "3. # COMMENT TU DÉCIDES — boucle empirique : lister des ÉVÉNEMENTS métier concrets du domaine, JAMAIS une liste d'agents ou de fonctionnalités ; l'agent dérive le roster en regardant où la chaîne casse. Toujours au moins un canal réel, pas simulé.\n" +
     "4. # INVARIANTS — garde-fous d'architecture et de sécurité, adaptés au domaine. Inclure : système d'enregistrement unique, accès indirect aux données (passerelle, droits minimaux), actions engageantes préparées puis tranchées par une file de validation humaine, journalisation horodatée, environnements séparés, clause anti-hobbling (un but, des garde-fous, un moyen de vérifier, puis laisse-les faire).\n" +
-    "5. # ENVIRONNEMENT — des FAITS, pas des corrections : 'personne ne répondra à une question : tu tranches, tu écris l'hypothèse dans le dépôt, tu continues' ; l'état du run vit dans le dépôt (reprise après coupure) ; entretien continu (code mort, instructions inutiles). Routage modèles en principe : 'Fable 5 pour ce qui tranche — architecture, arbitrages, jugements de vérification ; Opus 5 ou Sonnet 5 pour ce qui produit, avec l'effort que tu estimes nécessaire. En cas de doute, le fort.'\n" +
+    "5. # ENVIRONNEMENT — des FAITS, pas des corrections : 'personne ne répondra à une question : tu tranches, tu écris l'hypothèse dans le dépôt, tu continues' ; l'état du run vit dans le dépôt (reprise après coupure) ; entretien continu (code mort, instructions inutiles). Routage modèles, à reprendre TEL QUEL — c'est une règle d'escalade, pas une préférence de modèle : 'Modèles : Sonnet produit, Fable tranche. Échec vérifié → un cran au-dessus. Sous-agents pareil. Rien à consigner sauf dérogation.'\n" +
     "6. # VÉRIFICATION — l'oracle avant la construction : un scénario passe uniquement par des ASSERTIONS sur l'état du système d'enregistrement (valeurs justes, statuts attendus, ligne d'audit par action). Rejouer la chaîne entière après chaque ajout.\n" +
     "7. # ESCALADE — les seuls arrêts autorisés (actions engageantes du domaine) : l'agent prépare, dépose prêt à valider, repart.\n" +
     "8. # SORTIE — critère verrouillé aux deux bords : ni truquable en n'escaladant jamais, ni en escaladant tout (la file ne contient que des actions engageantes). Se termine par 'Sinon tu continues.'\n\n" +
@@ -70,13 +73,36 @@ export function buildMeta(limit) {
 /* Le compte réel, en caractères Unicode — jamais une estimation à l'œil. */
 export const countChars = (value) => [...String(value)].length;
 
+/* PLAFOND DUR — aucun prompt sorti de l'atelier ne l'atteint, quel que soit
+   le réglage.
+   Mesuré le 2026-08-02 : un prompt de plus de 4000 caractères est sorti
+   « au vert ». Il l'était : le curseur des réglages montait à 8000, et le
+   vérificateur comparait à CETTE limite-là. Une limite réglable par
+   l'utilisateur mesure donc son propre réglage, pas ce qu'un agent accepte —
+   c'est un vérificateur qui se note lui-même.
+   Le plafond vit ici, dans `verifyPrompt`, parce que TOUT ce qui mesure y
+   passe : première génération, application d'audit, correction du fil,
+   remise d'une ancienne version, édition à la main. Le clamp du curseur
+   n'est qu'une politesse d'affichage ; celui-ci est la garantie. */
+export const HARD_LIMIT = 3950;
+
+export const capLimit = (limit) => {
+  const n = Number(limit);
+  return Math.min(HARD_LIMIT, Math.max(1500, Number.isFinite(n) ? Math.round(n) : 3000));
+};
+
 export function verifyPrompt(text, limit) {
+  const cap = capLimit(limit);
   const fails = [];
   const n = countChars(text);
-  if (n >= limit) fails.push("longueur : " + n + " caractères pour une limite de " + limit);
+  const over = n >= cap;
+  if (over) fails.push("longueur : " + n + " caractères pour une limite de " + cap);
   if (!text.trim().startsWith("# ")) fails.push("ne commence pas par une section '# '");
   if (!text.includes("# SORTIE")) fails.push("section # SORTIE absente — sortie probablement tronquée");
-  return { pass: fails.length === 0, fails, count: n };
+  /* `over` est séparé de `pass` : une faute de structure se répare à la main,
+     une longueur excessive ne se répare pas — le prompt est refusé tel quel
+     par l'agent à qui on le donne. Les deux n'appellent pas la même conduite. */
+  return { pass: fails.length === 0, fails, count: n, over, limit: cap };
 }
 
 /* Le juge répond en JSON. On retire les clôtures de code et, par sécurité,

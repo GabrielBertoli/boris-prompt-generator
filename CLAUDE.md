@@ -54,14 +54,28 @@ Tous les parcours passent en preview, assertions au vert bundle et mail compris 
   en les lisant — pas en refaisant le chemin.
 - **Deux instruments de vérification**, et le skill `/verify` du dépôt
   (`.claude/skills/verify/SKILL.md`) dit lequel prouve quoi :
-  1. `npm run verify` — **122 assertions**, au vert sur la production le
-     2026-08-01. Rien ne se déclare sans l'avoir rejoué. **Mais il
-     n'exerce aucun palier responsive** : il force la largeur du document
-     et les media queries s'évaluent sur le vrai viewport (`DECISIONS.md`
-     § 18).
+  1. `npm run verify` — **112 assertions en local**, au vert le 2026-08-02
+     (les parcours d'accès s'y ajoutent quand `BASE_URL` est fourni : 122
+     sur la production le 2026-08-01). Rien ne se déclare sans l'avoir
+     rejoué. **Mais il n'exerce aucun palier responsive** : il force la
+     largeur du document et les media queries s'évaluent sur le vrai
+     viewport (`DECISIONS.md` § 18).
+     Piège d'ENVIRONNEMENT, mesuré le 2026-08-02 : la sonde utilise le
+     **profil Chrome par défaut** (un profil jetable fait pendre
+     `--dump-dom`). Quand le Chrome de Gabriel est ouvert et occupé, le
+     lancement headless passe de quelques secondes à plus de 60 s, et les
+     deux surfaces échouent sur « Chrome n'a pas rendu la main » — c'est
+     l'environnement, pas le code, et allonger le délai n'y change rien
+     (essayé à 240 s). Les assertions Node ne dépendent de rien : elles
+     restent la preuve utilisable dans ce cas.
   2. Le pilotage réel (Playwright, `channel: "chrome"`, installé hors du
      dépôt) — le seul qui prouve un parcours au clic et les paliers
      mobiles. C'est lui qui a trouvé le débordement de 15 px à 320 px.
+- Deux règles de produit posées le 2026-08-02, motivées dans `DECISIONS.md`
+  § 19 et § 20 : **aucun prompt au-dessus de 3950 caractères ne sort de
+  l'atelier** (plafond dans `verifyPrompt`, pas dans le réglage), et **tout
+  prompt affiché porte son bouton copier**. Le fil de correction est passé
+  au bord gauche (le pupitre), la casse est redevenue un tiroir.
 - Un seul chantier reste ouvert, et il n'appartient pas à l'agent : l'envoi
   du mail de réinitialisation, suspendu à une clé Resend de la main de
   Gabriel — voir `ETAT.md`, § « Ce qui reste ouvert ».

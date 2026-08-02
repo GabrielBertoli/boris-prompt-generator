@@ -27,6 +27,13 @@
   --font-ui: "Archivo", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
 
+  /* Hauteur de la barre supérieure. Elle est COLLANTE : tout ce qui se cale
+     sur le haut de la fenêtre — le pupitre, la hauteur utile de la feuille —
+     doit partir de sous elle, sinon il passe dessous. La barre l'applique
+     elle-même (`min-height`), donc la constante ne peut pas mentir — mesuré
+     à 65 px de contenu, 66 pour que le `min-height` porte vraiment. */
+  --topbar-h: 66px;
+
   --r-sm: 8px;
   --r-md: 12px;
   --r-lg: 18px;
@@ -614,8 +621,14 @@ pre {
   font-family: var(--font-mono);
 }
 
+/* La feuille tient dans l'écran. Le reste de la carte 02 — compteur, jauge,
+   coûts, journal des tentatives, rangée de boutons — occupe environ 400 px ;
+   la feuille prend ce qui reste, avec un plancher pour les petits écrans où
+   elle défilera de toute façon. Bornée à 460 px en dur, elle poussait les
+   boutons « Copier / Audit / Télécharger » hors de la fenêtre sur un
+   portable : il fallait faire défiler pour agir sur ce qu'on lisait. */
 .prompt-sheet {
-  max-height: 460px;
+  max-height: max(300px, calc(100vh - var(--topbar-h) - 400px));
   overflow: auto;
   padding: 20px;
   background: var(--ink-2);
@@ -899,9 +912,55 @@ pre {
 
 /* ---------- fil de correction ---------- */
 
+/* ================================================================
+   LE PUPITRE — le fil de correction, à demeure sur le bord gauche.
+
+   Il tient toute la hauteur de la fenêtre et ne défile PAS avec la page :
+   seul son corps défile, le composeur reste sous la main. C'est la raison
+   même du déplacement — écrire une correction sans perdre de vue la pièce
+   qu'on corrige. En dessous de 1100 px il n'y a pas de bord : il repasse
+   dans le flux, SOUS le marbre (`order`), et retrouve une hauteur libre.
+   ================================================================ */
+
+.pupitre {
+  order: 2;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px 20px 0;
+}
+
+.pupitre-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.pupitre-vide {
+  font-size: 14px;
+}
+
+.pupitre-corps {
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.pupitre-pied {
+  flex: none;
+  padding-bottom: 20px;
+}
+
+.pupitre-pied textarea {
+  font-size: 13.5px !important;
+}
+
 .thread {
-  padding-top: 22px;
-  border-top: 1px solid var(--line-soft);
+  min-width: 0;
 }
 
 .turn {
@@ -982,6 +1041,15 @@ pre {
   margin: 0 auto;
   padding: 0 20px;
   min-width: 0;
+}
+
+/* L'atelier fait défiler tout seul jusqu'à la carte du prompt. La barre du
+   haut étant COLLANTE, `scrollIntoView` calait l'en-tête de la carte —
+   « 02 · Vérificateur », le compteur — juste dessous : la carte arrivait
+   déjà amputée. La marge de défilement rend à la carte sa hauteur pleine,
+   et c'est ce qui la fait tenir dans un écran. */
+.atelier-main > section {
+  scroll-margin-top: calc(var(--topbar-h) + 12px);
 }
 
 /* ---------- la casse ---------- */
@@ -1198,33 +1266,51 @@ pre {
   max-width: 84rem;
   margin: 0 auto;
   padding: 12px 20px;
+  /* Fait de `--topbar-h` une mesure et non une supposition. */
+  min-height: var(--topbar-h);
 }
 
-/* ---------- au-delà de 1100 px : panneau permanent ---------- */
+/* ---------- au-delà de 1100 px : le pupitre prend le bord ----------
+
+   La casse N'EST PLUS un panneau permanent : elle est redevenue le tiroir
+   qu'elle est sur petit écran, ouvert par le bouton ☰ de la barre. Deux
+   panneaux collés à gauche ne laissaient plus de milieu au prompt, et
+   c'est le prompt qu'on est venu lire. */
 
 @media (min-width: 1100px) {
   .shell {
-    grid-template-columns: 340px minmax(0, 1fr);
+    grid-template-columns: 380px minmax(0, 1fr);
+    align-items: start;
   }
 
-  .casse {
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    transform: none;
-    box-shadow: none;
+  .pupitre {
+    order: 0;
     grid-column: 1;
+    position: sticky;
+    top: var(--topbar-h);
+    height: calc(100vh - var(--topbar-h));
+    padding: 20px 18px 0;
+    background: linear-gradient(180deg, var(--surface), var(--ink-2));
+    border-right: 1px solid var(--line);
   }
 
-  .casse-veil,
-  .casse-toggle,
-  .casse-shut {
-    display: none;
+  /* Seul le corps défile : le composeur ne quitte jamais l'écran. */
+  .pupitre-corps {
+    flex: 1;
+    overflow-y: auto;
+    margin: 0 -6px;
+    padding: 2px 6px;
   }
 
   .atelier-main {
     grid-column: 2;
     padding: 0 40px;
+  }
+}
+
+@media (min-width: 1500px) {
+  .shell {
+    grid-template-columns: 420px minmax(0, 1fr);
   }
 }
 

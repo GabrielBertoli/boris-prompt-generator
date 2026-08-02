@@ -55,13 +55,34 @@ de Gabriel (§ « Ce qui reste ouvert »). Tout le reste est livré et vérifié
 Reprendre par : `npm run verify` seul (assertions locales), puis avec
 `BASE_URL=…` pour viser un déploiement.
 
-## Le fil de correction
+## Le fil de correction — le pupitre, à gauche
+
+**Déplacé le 2026-08-02.** Le fil a quitté le marbre : il tient désormais le
+bord gauche sur toute la hauteur (le **pupitre**), seul son corps défile, et
+le composeur ne quitte jamais l'écran. Empilé sous le prompt, il obligeait à
+faire défiler toute la page pour relire ce qu'on venait de demander — et le
+prompt sortait de l'écran au moment précis où on écrivait ce qu'il fallait y
+changer. Le prompt reste au milieu et **tient dans un écran** (feuille bornée
+à la hauteur utile, marge de défilement sous la barre collante). En dessous
+de 1100 px, le pupitre repasse dans le flux, sous le marbre.
+
+La casse redevient donc un **tiroir** (bouton ☰ de la barre) à toutes les
+largeurs : deux panneaux permanents à gauche ne laissaient plus de milieu au
+prompt. Cela renverse sciemment `DECISIONS.md` § 16 ; le motif est en § 20.
 
 Chaque génération porte son fil : on écrit en français ce qu'il faut
 changer, l'atelier régénère le prompt **entier**, le mesure, et garde la
 trace. « Reprendre le fil » sur une carte rouvre le prompt avec son
 historique ; « Remettre cette version » revient en arrière. L'audit du juge
 entre au fil comme une correction — le fil dit d'où vient chaque version.
+
+**Tout prompt affiché porte son bouton copier** (2026-08-02) : la version en
+cours, chaque version antérieure du fil, chaque entrée de la casse, et le
+prompt ouvert dans l'éditeur. Les versions antérieures s'affichaient en
+entier sans aucun moyen de les copier — un texte qu'on ne peut que
+sélectionner à la souris n'est pas livré. Un tour **coupé** n'en porte pas :
+il ne contient plus le prompt mais une ligne d'état, et la copier serait
+mentir.
 
 **Le fil vit dans l'entrée de bibliothèque**, donc dans le profil de son
 propriétaire (`/api/prompts`, clé dérivée de la session), et il suit d'un
@@ -361,6 +382,27 @@ fenêtre de visée n'est plus un texte figé : `targetWindow(limit)` donne
 méta-prompt, aux instructions d'étape et au vérificateur. Un réglage 3000
 déjà en localStorage est migré (c'était le défaut, jamais choisi). Effet
 mesuré : à 3900, le premier jet passe sans réparation.
+
+**Plafond dur à 3950, et il n'est plus réglable** (2026-08-02). Un prompt de
+plus de 4000 caractères est sorti « au vert » : le curseur montait à **8000**
+et le vérificateur comparait à cette limite-là — il notait le réglage, pas le
+prompt. `HARD_LIMIT` vit maintenant dans `verifyPrompt`, par où passent la
+génération, l'audit appliqué, la correction du fil, la remise d'une ancienne
+version et l'édition à la main ; le curseur ne fait plus que descendre, et un
+réglage à 8000 déjà enregistré est rabattu à la relecture.
+
+Ce qui en découle, et qui compte autant que le chiffre :
+
+- Un prompt hors plafond **ne s'affiche pas**. Il ne s'affichait qu'assorti
+  d'un avertissement, sous un bouton « Copier le prompt » — livrer un
+  produit cassé en s'en excusant.
+- Une correction refusée n'écrase pas la version en vigueur : elle entre au
+  fil marquée *coupée* (trace gardée, texte non), donc ni copiable ni
+  restaurable.
+- La boucle rend la **meilleure** tentative, plus la dernière : cinq
+  serrages, rien ne dit que le cinquième bat le troisième.
+- Le compteur, la jauge et le journal des tentatives restent à l'écran —
+  c'est la preuve de ce qui s'est passé. Seule la feuille manque.
 
 **Compteur de dépense par personne.** Le navigateur mesure (jetons ×
 tarif catalogue, `PRICES` dans `src/meta.js`), le serveur additionne :

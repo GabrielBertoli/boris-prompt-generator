@@ -239,6 +239,57 @@ viewport. Playwright n'est pas une dépendance du dépôt : on l'installe à
 côté, `channel: "chrome"` évite tout téléchargement. Le mode d'emploi
 complet est dans `.claude/skills/verify/SKILL.md`.
 
+## 19. Le plafond de longueur est dans le vérificateur, pas dans le réglage
+
+Mesuré le 2026-08-02 : un prompt de plus de 4000 caractères est sorti « au
+vert ». Il l'était — le curseur des réglages montait à 8000 et le
+vérificateur comparait à **cette** limite. Une limite réglable par
+l'utilisateur mesure son propre réglage, pas ce qu'un agent accepte : le
+vérificateur se notait lui-même.
+
+`HARD_LIMIT = 3950` vit donc dans `verifyPrompt`, par où TOUT passe —
+première génération, application d'audit, correction du fil, remise d'une
+ancienne version, édition à la main. Le clamp du curseur (`capLimit`) n'est
+qu'une politesse d'affichage ; le plafond est la garantie.
+
+Trois conséquences assumées :
+
+- `check.over` est distinct de `check.pass`. Une faute de structure se
+  répare à la main et le prompt s'affiche ; un dépassement ne se répare
+  pas, et **rien ne s'affiche**. Montrer un prompt hors limite sous un
+  bouton « Copier le prompt », c'était livrer un produit cassé en s'en
+  excusant.
+- Une correction refusée n'écrase pas la version en vigueur. Elle entre au
+  fil marquée `compacted` : la trace reste, le texte non — sinon le bouton
+  copier du fil rendrait par la bande le prompt qu'on vient de refuser.
+- `runVerifiedGeneration` rend la **meilleure** tentative, plus la
+  dernière. Chaque serrage est un coup de dé ; rendre le cinquième jetait
+  un texte plus court déjà obtenu et déjà payé.
+
+## 20. Le fil quitte le marbre, la casse redevient un tiroir
+
+Une correction est un dialogue qui dure ; le prompt est la pièce qu'on
+regarde. Empilés, ils obligeaient à faire défiler toute la page pour relire
+ce qu'on venait de demander — et le prompt disparaissait de l'écran au
+moment précis où on écrivait ce qu'il fallait y changer.
+
+Le fil devient le **pupitre**, collé au bord gauche sur toute la hauteur :
+seul son corps défile, le composeur ne quitte jamais l'écran. En dessous de
+1100 px il repasse dans le flux, **sous** le marbre (`order`) — il n'y a
+plus de bord à occuper.
+
+La casse repasse donc en tiroir (bouton ☰ de la barre) : elle renversait la
+décision 16, et c'est voulu. Deux panneaux permanents à gauche ne laissaient
+plus de milieu au prompt, et c'est le prompt qu'on vient lire. Le tiroir se
+referme toujours par transformation — la raison de 16 tient toujours.
+
+Deux mesures qui vont avec, et sans lesquelles « tenir dans un écran » est
+un vœu : `--topbar-h` est appliquée par la barre elle-même (`min-height`),
+donc la constante ne peut pas mentir à ce qui se cale dessous ; et les
+sections du marbre portent un `scroll-margin-top`, sinon le défilement
+automatique glissait l'en-tête de la carte sous la barre collante et la
+carte arrivait déjà amputée.
+
 ---
 
 ## Reste à la main de Gabriel
