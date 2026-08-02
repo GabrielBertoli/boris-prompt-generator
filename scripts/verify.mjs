@@ -217,6 +217,121 @@ section("Plafond de longueur");
   );
 }
 
+/* ---------- 1 bis 3. la note du juge ----------
+   Le juge répond en JSON libre. Tout ce qui suit porte sur ce qu'on en
+   RECONSTRUIT : une note de 47 — déjà vue quand un modèle note sur 100 —
+   ferait sortir l'aiguille de la jauge sans que rien ne le signale. */
+
+section("La note du juge");
+
+{
+  const { BANDES, CRITERES, auditInstruction, bandeDe, normalizeNote } = await import("../src/meta.js");
+  const lib = await import("../src/library.js");
+  const { Arret, callClaude } = await import("../src/api.js");
+
+  const brut = {
+    note: 7.5,
+    verdict: "Tient la méthode, l'oracle est faible.",
+    criteres: CRITERES.map((c, i) => ({ cle: c.cle, note: 6 + i * 0.5, mot: `mot ${i}` })),
+    failles: ["a", "b"],
+  };
+  const n = normalizeNote(brut, "claude-opus-5");
+  assert("une réponse du juge se relit", n.note === 7.5, `${n.note}`);
+  assert("les six critères sont reconstruits", n.criteres.length === 6, `${n.criteres.length}`);
+  assert("dans l'ordre de la grille", n.criteres.every((c, i) => c.cle === CRITERES[i].cle));
+  assert("le juge est retenu", n.juge === "claude-opus-5");
+
+  assert("une note de 47 est ramenée à 10", normalizeNote({ note: 47 }, "j").note === 10);
+  assert("une note négative est ramenée à 0", normalizeNote({ note: -3 }, "j").note === 0);
+  assert("une note illisible ne passe pas", normalizeNote({ note: "beaucoup" }, "j") === null);
+  assert("une réponse vide ne passe pas", normalizeNote(null, "j") === null);
+
+  /* Sans note globale, c'est le MAILLON FAIBLE qui la remplace — jamais la
+     moyenne : cinq critères à 9 et un vérificateur à 2 donneraient 7,8, soit
+     « bon prompt » pour un prompt sans oracle. */
+  const sansGlobale = normalizeNote(
+    { criteres: CRITERES.map((c, i) => ({ cle: c.cle, note: i === 3 ? 2 : 9 })) },
+    "j"
+  );
+  assert("sans note globale, le plus faible fait foi", sansGlobale.note === 2, `${sansGlobale.note}`);
+
+  const inconnu = normalizeNote({ note: 8, criteres: [{ cle: "inventé", note: 10 }] }, "j");
+  assert("un critère inconnu est ignoré", inconnu.criteres.every((c) => c.note === null));
+
+  /* Les bandes : c'est ce que l'œil lit sur la jauge. */
+  assert("10 est vert", bandeDe(10).ton === "var(--signal)");
+  assert("8 est vert — la bande commence à 8", bandeDe(8).ton === "var(--signal)");
+  assert("7,9 est orange", bandeDe(7.9).ton === "var(--ember)");
+  assert("6 est orange", bandeDe(6).ton === "var(--ember)");
+  assert("5,9 est rouge", bandeDe(5.9).ton === "var(--alarm)");
+  assert("0 est rouge", bandeDe(0).ton === "var(--alarm)");
+  assert("les bandes descendent", BANDES.every((b, i) => i === 0 || b.min < BANDES[i - 1].min));
+
+  /* La consigne du juge doit VRAIMENT porter la grille et la règle : sans
+     elles, le modèle note à vue et la jauge affiche une opinion. */
+  const consigne = auditInstruction();
+  assert("la consigne cite les six clés", CRITERES.every((c) => consigne.includes(c.cle)));
+  assert("elle interdit la moyenne", consigne.includes("n'est PAS la moyenne"));
+  assert("elle borne l'écart au plus faible", consigne.includes("2 points"));
+  assert("elle réclame du JSON seul", consigne.includes("UNIQUEMENT avec ce JSON"));
+
+  /* La note se pose sur le dernier tour d'ATELIER, pas sur le dernier tour.
+     Un refus « trop long » laisse un tour compacté en queue : le noter
+     rattacherait le jugement à un texte qui n'existe pas. */
+  let fil = [];
+  fil = lib.appendTurn(fil, { role: "atelier", text: "V1", version: 1, count: 10, pass: true });
+  fil = lib.appendTurn(fil, { role: "moi", text: "corrige" });
+  fil = lib.appendTurn(fil, { role: "atelier", text: "V2", version: 2, count: 12, pass: true });
+  fil = lib.appendTurn(fil, { role: "moi", text: "encore" });
+  fil = lib.appendTurn(fil, { role: "atelier", text: "Refusé — trop long", version: 2, count: 4200, pass: false, compacted: true });
+  const noté = lib.noterDernierTour(fil, n);
+  assert("la note va au dernier tour d'atelier réel", noté[2].note?.note === 7.5);
+  assert("pas au tour compacté", !noté[4].note);
+  assert("pas à une demande", !noté[1].note && !noté[3].note);
+  assert("le fil garde sa longueur", noté.length === fil.length);
+
+  /* Ce qui survit à la coupe : le chiffre, pas les six critères. */
+  let long = [];
+  for (let i = 1; i <= 6; i += 1) {
+    long = lib.appendTurn(long, { role: "moi", text: `demande ${i}` });
+    long = lib.appendTurn(long, {
+      role: "atelier",
+      text: `PROMPT-${i}`,
+      version: i,
+      count: 3200,
+      pass: true,
+      note: normalizeNote({ note: 5 + i * 0.5, criteres: brut.criteres }, "j"),
+    });
+  }
+  const coupé = long.find((t) => t.compacted);
+  assert("un tour coupé garde son chiffre", coupé.note?.note != null, `${coupé.note?.note}`);
+  assert("mais plus ses critères", coupé.note.criteres.length === 0);
+  assert("et la ligne d'état le dit", coupé.text.includes("noté"), coupé.text);
+
+  /* Aller-retour d'export : la note suit le prompt d'un appareil à l'autre. */
+  const entree = lib.makeEntry({ idea: "sonde", prompt: "# QUI TU ES\nx\n# SORTIE\nSinon tu continues.", limit: 3900, version: 2, chat: noté, note: n });
+  const relu = lib.parseBundle(lib.exportBundle([entree], "sonde")).items[0];
+  assert("la note de l'entrée survit à l'export", relu.note?.note === 7.5, `${relu.note?.note}`);
+  assert("celle du fil aussi", relu.chat.find((t) => t.note)?.note.note === 7.5);
+  const trafiqué = lib.parseBundle(
+    JSON.stringify([{ ...entree, note: { ...n, note: 47 } }])
+  ).items[0];
+  assert("un fichier trafiqué ne pose pas 47 dans une jauge sur 10", trafiqué.note.note === 10);
+
+  /* L'arrêt : un signal déjà avorté ne doit RIEN envoyer sur le réseau — et
+     se distinguer d'une panne, sinon un arrêt voulu s'affiche en rouge. */
+  const ctrl = new AbortController();
+  ctrl.abort();
+  let levée = null;
+  try {
+    await callClaude([{ role: "user", content: "x" }], { apiKey: "sk-ant-faux", model: "claude-sonnet-5", signal: ctrl.signal });
+  } catch (e) {
+    levée = e;
+  }
+  assert("un signal déjà avorté arrête avant l'appel", levée instanceof Arret);
+  assert("et se reconnaît comme un arrêt", levée?.arret === true && levée?.name === "Arret");
+}
+
 /* ---------- 1 ter. le fil de correction ---------- */
 
 section("Fil de correction");
@@ -548,6 +663,23 @@ const CARTE_SONDE = {
       pass: true,
     },
   ],
+  /* La note du juge, telle qu'elle est ENREGISTRÉE : c'est elle qui doit
+     remplir la jauge à la réouverture, sans nouvel appel au juge. */
+  note: {
+    note: 7.5,
+    verdict: "Tient la méthode, l'oracle est faible.",
+    juge: "claude-opus-5",
+    pourVersion: 2,
+    criteres: [
+      { cle: "structure", nom: "Structure", note: 9, mot: "huit sections, ordre tenu" },
+      { cle: "boucle", nom: "Boucle empirique", note: 8, mot: "événements concrets" },
+      { cle: "invariants", nom: "Invariants", note: 8, mot: "file de validation posée" },
+      { cle: "verificateur", nom: "Vérificateur", note: 5.5, mot: "assertions trop vagues" },
+      { cle: "sortie", nom: "Escalade et sortie", note: 8, mot: "verrouillée aux deux bords" },
+      { cle: "economie", nom: "Économie", note: 7, mot: "une redite en INVARIANTS" },
+    ],
+    at: "2026-08-01T10:01:00.000Z",
+  },
   savedAt: "2026-08-01T10:00:00.000Z",
   updatedAt: "2026-08-01T10:00:00.000Z",
 };
@@ -633,6 +765,14 @@ const SURFACES = [
           ).length;
           copieBtns[0]?.click();
 
+          /* La jauge est là sans qu'on ait rien demandé ; le « ⋯ » ouvre
+             le détail. On mesure les deux : une jauge qui s'affiche mais
+             ne s'explique pas est un chiffre tombé du ciel. */
+          const jaugeAvant = Boolean(document.querySelector(".jauge-note"));
+          const chiffre = (document.querySelector(".jauge-chiffre")?.textContent || "").trim();
+          const detailAvant = Boolean(document.querySelector(".note-detail"));
+          document.querySelector(".note-plus")?.click();
+
           const btn = boutons().find((b) => b.textContent.trim() === "Imprimer");
           if (btn) btn.click();
 
@@ -662,6 +802,14 @@ const SURFACES = [
               feuilles: [...document.querySelectorAll(".prompt-sheet")]
                 .filter((el) => el.textContent.includes("JETONPROMPT")).length,
               filRepete: Boolean(pupitre && pupitre.textContent.includes("JETONPROMPT")),
+              jauge: jaugeAvant,
+              chiffre,
+              detailAvant,
+              detailApres: Boolean(document.querySelector(".note-detail")),
+              criteres: document.querySelectorAll(".note-detail .critere").length,
+              repere: Boolean(document.querySelector(".jauge-note .repere")),
+              bandes: document.querySelectorAll(".jauge-note .bande").length,
+              compte: (document.querySelector(".note-flanc .tag")?.textContent || "").trim(),
               copies: copieBtns.length,
               remises,
               copieAncienne: (window.__copie || "").includes("ANCIENNEVERSION"),
@@ -693,6 +841,16 @@ const SURFACES = [
       /* Tout prompt sorti de l'atelier se copie — la version en cours comme
          les antérieures. Deux tours d'atelier dans la sonde, donc deux
          boutons ; une seule version antérieure, donc une seule remise. */
+      /* La note : affichée d'office, dépliable à la demande. */
+      assert("la jauge de la note est là sans rien demander", r.jauge);
+      assert("elle porte les trois bandes du barème", r.bandes === 3, `${r.bandes} bande(s)`);
+      assert("et le repère sur la note", r.repere);
+      assert("le chiffre enregistré est réaffiché", r.chiffre.startsWith("7,5"), r.chiffre);
+      assert("la longueur reste lisible, en puce", r.compte.includes("car."), r.compte);
+      assert("le détail est replié d'office", !r.detailAvant);
+      assert("« ⋯ » l'ouvre", r.detailApres);
+      assert("avec les six critères", r.criteres === 6, `${r.criteres} critère(s)`);
+
       assert("chaque prompt du fil porte son bouton copier", r.copies === 2, `${r.copies} bouton(s)`);
       assert("seule une version antérieure se remet", r.remises === 1, `${r.remises} bouton(s)`);
       assert("copier un tour copie CE tour", r.copieAncienne);

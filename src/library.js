@@ -6,6 +6,7 @@
    sur une panne de réseau. */
 
 import { api } from "./api.js";
+import { normalizeNote } from "./meta.js";
 
 const localKey = (userId) => `atelier-boris:bibliotheque:${userId}`;
 
@@ -52,7 +53,11 @@ export async function persistLibrary(userId, items) {
 
 export const countChars = (value) => [...String(value)].length;
 
-export function makeEntry({ idea, mode, prompt, limit, version, title, chat }) {
+/* 8,5 et non 8.5 — la virgule est décimale en français, partout dans
+   l'interface comme dans ce qui s'enregistre. */
+export const fr = (n) => String(n).replace(".", ",");
+
+export function makeEntry({ idea, mode, prompt, limit, version, title, chat, note }) {
   const now = new Date().toISOString();
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -64,6 +69,10 @@ export function makeEntry({ idea, mode, prompt, limit, version, title, chat }) {
     limit,
     version,
     chat: Array.isArray(chat) ? chat : [],
+    /* La note du juge suit le prompt : sans elle dans l'entrée, rouvrir un
+       prompt de la casse affichait une jauge vide et il fallait repayer un
+       appel au juge pour retrouver un chiffre déjà obtenu. */
+    ...(note ? { note } : {}),
     savedAt: now,
     updatedAt: now,
   };
@@ -107,11 +116,35 @@ export function compactChat(chat) {
       count: turn.count,
       pass: turn.pass,
       compacted: true,
+      /* Le texte part, la NOTE reste — réduite à son chiffre. C'est ce
+         qu'on relit dans un fil ancien (« la v3 valait 8,5, la v4 est
+         retombée à 6 ») et cela ne pèse rien ; garder les six critères de
+         quarante tours, si. */
+      ...(turn.note && turn.note.note != null
+        ? { note: { note: turn.note.note, juge: turn.note.juge || "", at: turn.note.at || turn.at, criteres: [] } }
+        : {}),
       text: `v${turn.version} — ${turn.count} caractères, ${
         turn.pass ? "au vert" : "hors limite"
-      }. Texte plus ancien, non conservé.`,
+      }${turn.note && turn.note.note != null ? `, noté ${fr(turn.note.note)}/10` : ""}. Texte plus ancien, non conservé.`,
     };
   });
+}
+
+/* La note se pose sur le DERNIER tour de l'atelier, jamais sur le fil
+   entier : le juge n'a lu qu'une version. La chercher en remontant depuis
+   la fin — et non prendre le dernier tour tout court — évite de noter la
+   demande de l'utilisateur quand le refus d'un prompt trop long a laissé
+   un tour d'atelier compacté en queue. */
+export function noterDernierTour(chat, note) {
+  const list = Array.isArray(chat) ? chat : [];
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    if (list[i].role === "atelier" && !list[i].compacted) {
+      const next = [...list];
+      next[i] = { ...next[i], note };
+      return next;
+    }
+  }
+  return list;
 }
 
 /* Une réponse dont le texte a survécu peut être remise en place. */
@@ -216,12 +249,21 @@ function normalize(raw) {
               ...(t.count ? { count: Number(t.count) } : {}),
               ...(t.pass != null ? { pass: Boolean(t.pass) } : {}),
               ...(t.compacted ? { compacted: true } : {}),
+              ...(noteDe(t) ? { note: noteDe(t) } : {}),
             }))
         )
       : [],
+    ...(noteDe(raw) ? { note: noteDe(raw) } : {}),
     savedAt,
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : savedAt,
   };
+}
+
+/* Une note importée passe par le même normaliseur que celle du juge :
+   nombres bornés, critères reconstruits par clé. Un fichier trafiqué ne
+   peut donc pas poser une note de 47 dans une jauge sur 10. */
+function noteDe(raw) {
+  return raw && raw.note != null ? normalizeNote(raw.note, raw.note?.juge) : null;
 }
 
 export function parseBundle(raw) {

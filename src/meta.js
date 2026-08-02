@@ -182,6 +182,107 @@ export function baseConvoFor({ idea, prompt, limit }) {
   return convo;
 }
 
+/* ================================================================
+   LA NOTE — ce que vaut le prompt, pas ce qu'il pèse.
+
+   Le grand nombre en tête de carte était le compte de caractères : une
+   mesure exacte de la seule chose qui ne dit rien de la qualité. Un prompt
+   de 3 800 caractères sans boucle empirique et un prompt de 3 800
+   caractères qui tient la méthode affichaient le même chiffre.
+
+   La note vient du JUGE — jamais du modèle qui a produit, ses angles morts
+   seraient corrélés. Six critères, chacun sur 10, et une règle qui empêche
+   la moyenne de masquer un trou : la note globale ne dépasse pas de plus
+   de 2 points le plus faible des critères. Sans elle, cinq critères à 9 et
+   un vérificateur à 2 donnaient 7,8 — « bon prompt » alors qu'il n'a aucun
+   oracle.
+   ================================================================ */
+
+export const CRITERES = [
+  { cle: "structure", nom: "Structure", quoi: "huit sections '# EN MAJUSCULES' dans l'ordre, titres exacts, phrases denses, agent tutoyé" },
+  { cle: "boucle", nom: "Boucle empirique", quoi: "# COMMENT TU DÉCIDES liste des ÉVÉNEMENTS métier concrets et jamais des agents ou des fonctionnalités ; au moins un canal réel, pas simulé" },
+  { cle: "invariants", nom: "Invariants", quoi: "système d'enregistrement unique, accès indirect aux données, actions engageantes tranchées par une file humaine, journalisation, environnements séparés, clause anti-cage" },
+  { cle: "verificateur", nom: "Vérificateur", quoi: "# VÉRIFICATION donne un oracle AVANT la construction : des assertions sur l'état du système, pas des intentions ; la chaîne entière est rejouée après chaque ajout" },
+  { cle: "sortie", nom: "Escalade et sortie", quoi: "escalade limitée aux actions engageantes du domaine ; # SORTIE verrouillée aux deux bords (ni truquable en n'escaladant jamais, ni en escaladant tout) et finit par « Sinon tu continues. »" },
+  { cle: "economie", nom: "Économie", quoi: "aucune correction comportementale (ne t'arrête pas, journalise en détail, topologie de fan-out) : natives sur les modèles actuels ; rien qui ne change une décision" },
+];
+
+/* Les bandes de la jauge. Une seule source : la couleur de la note, celle
+   de l'arc et celle d'un critère sortent toutes d'ici. */
+export const BANDES = [
+  { min: 8, ton: "var(--signal)", mot: "tient la méthode" },
+  { min: 6, ton: "var(--ember)", mot: "utilisable, mais troué" },
+  { min: 0, ton: "var(--alarm)", mot: "à refaire" },
+];
+
+export const bandeDe = (note) =>
+  BANDES.find((b) => Number(note) >= b.min) || BANDES[BANDES.length - 1];
+
+export function auditInstruction() {
+  const grille = CRITERES.map((c, i) => `${i + 1}. ${c.cle} — ${c.nom} : ${c.quoi}`).join("\n");
+  return (
+    "ÉTAPE 3 — Juge le prompt ci-dessus contre la méthode Boris, et NOTE-LE.\n\n" +
+    "GRILLE — six critères, chacun sur 10 :\n" +
+    grille +
+    "\n\nLa note globale n'est PAS la moyenne : elle ne dépasse pas de plus de 2 points " +
+    "le plus faible des critères. Un prompt sans oracle n'est pas un bon prompt, même " +
+    "si tout le reste est excellent. Note 8 à 10 seulement ce qu'on peut lancer tel quel.\n\n" +
+    'Réponds UNIQUEMENT avec ce JSON, sans autre texte :\n' +
+    '{"note":7.5,"verdict":"une phrase","criteres":[{"cle":"structure","note":8,"mot":"six mots"}],' +
+    '"failles":["..."],"hypotheses":["..."]}\n' +
+    "Un objet par critère, les six, dans l'ordre de la grille ; `mot` tient en une " +
+    "demi-ligne et dit CE QUI manque, pas que c'est bien. Maximum 3 failles réelles " +
+    "(tableau vide si aucune), maximum 3 hypothèses implicites que l'utilisateur doit " +
+    "connaître. Phrases courtes."
+  );
+}
+
+/* Le juge répond en JSON libre : on ne garde que ce qu'on a reconstruit
+   champ par champ, et on borne les nombres. Une note de 47 ou de -3 —
+   déjà vue quand un modèle note sur 100 — ferait sortir l'aiguille de la
+   jauge sans que rien ne le signale. */
+export function normalizeNote(raw, juge) {
+  if (!raw || typeof raw !== "object") return null;
+  const borne = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return null;
+    return Math.min(10, Math.max(0, Math.round(n * 10) / 10));
+  };
+
+  const criteres = CRITERES.map((c) => {
+    const trouve = Array.isArray(raw.criteres)
+      ? raw.criteres.find((x) => x && String(x.cle) === c.cle)
+      : null;
+    return {
+      cle: c.cle,
+      nom: c.nom,
+      note: trouve ? borne(trouve.note) : null,
+      mot: trouve && trouve.mot ? String(trouve.mot).trim().slice(0, 160) : "",
+    };
+  });
+
+  const donnees = criteres.map((c) => c.note).filter((n) => n != null);
+  const globale = borne(raw.note);
+  /* Si le juge oublie la note globale, le plus faible des critères la
+     remplace — jamais la moyenne : c'est précisément ce que la règle
+     ci-dessus interdit. */
+  const note = globale != null ? globale : donnees.length ? Math.min(...donnees) : null;
+  if (note == null) return null;
+
+  return {
+    note,
+    verdict: String(raw.verdict || "").trim().slice(0, 400),
+    criteres,
+    juge: juge || String(raw.juge || ""),
+    /* De quelle version cette note parle. Le juge répond APRÈS que la
+       version est enregistrée : sans ce numéro, une note de v2 restait
+       affichée au-dessus de v3 pendant les vingt secondes du jugement —
+       un chiffre juste, sur le mauvais prompt. */
+    ...(Number(raw.pourVersion) > 0 ? { pourVersion: Number(raw.pourVersion) } : {}),
+    at: typeof raw.at === "string" ? raw.at : new Date().toISOString(),
+  };
+}
+
 /* La consigne de correction : la demande de l'utilisateur, plus les
    contraintes qui ne se négocient pas. */
 export function correctionInstruction(demand, limit) {

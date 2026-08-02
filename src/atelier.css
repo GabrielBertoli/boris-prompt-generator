@@ -652,6 +652,202 @@ pre {
   border: 3px solid var(--ink-2);
 }
 
+/* ================================================================
+   LA NOTE DU JUGE — un cadran, pas un compteur
+
+   Ce qui était affiché en grand était la LONGUEUR. Elle reste, en puce,
+   avec ce qui se compte ; le grand chiffre dit maintenant ce que vaut le
+   prompt. Les trois bandes du barème sont peintes à demeure : on lit où
+   tombe la note sans connaître le barème.
+   ================================================================ */
+
+.note-rangee {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 22px;
+}
+
+.jauge-note {
+  position: relative;
+  flex: none;
+  width: 210px;
+}
+
+.jauge-note svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.jauge-note .bande {
+  fill: none;
+  stroke-width: 11;
+  stroke-linecap: butt;
+  opacity: 0.3;
+}
+
+/* L'arc rempli reste PLUS FIN que les bandes : posé à la même épaisseur il
+   les recouvrait, et le barème — la seule chose qui rende la note lisible
+   sans la connaître — disparaissait sous elle. */
+.jauge-note .rempli {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.jauge-note .repere {
+  stroke: var(--chalk);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.jauge-note .jauge-bout {
+  fill: var(--muted-2);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-anchor: middle;
+}
+
+/* Le chiffre se pose DANS le cadran, sur la ligne du centre : posé en
+   dessous, il faisait retomber l'œil hors de l'arc. */
+.jauge-chiffre {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 44%;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 46px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.jauge-sur {
+  margin-left: 3px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--muted-2);
+}
+
+.note-flanc {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.note-mot {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+}
+
+.note-verdict {
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--chalk);
+}
+
+/* Le « ⋯ » de la casse, repris tel quel : le même geste ouvre le détail
+   d'un prompt et le détail d'une note. */
+.note-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+.note-plus:hover:not(:disabled) {
+  color: var(--ember);
+  border-color: var(--ember);
+}
+
+.note-plus:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.critere + .critere {
+  margin-top: 14px;
+}
+
+.critere-tete {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.critere-nom {
+  flex: none;
+  width: 132px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.critere-barre {
+  flex: 1;
+  min-width: 0;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+
+.critere-barre > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.critere-note {
+  flex: none;
+  width: 34px;
+  text-align: right;
+  font-size: 13px;
+}
+
+.critere-mot {
+  margin: 5px 0 0 144px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.critere-regle {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--muted-2);
+}
+
+@media (max-width: 640px) {
+  .critere-nom {
+    width: 100px;
+    font-size: 10px;
+  }
+  .critere-mot {
+    margin-left: 0;
+  }
+}
+
 /* ---------- barre supérieure ---------- */
 
 .topbar {

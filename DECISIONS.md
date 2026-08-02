@@ -290,6 +290,68 @@ sections du marbre portent un `scroll-margin-top`, sinon le défilement
 automatique glissait l'en-tête de la carte sous la barre collante et la
 carte arrivait déjà amputée.
 
+## 21. Le grand chiffre dit ce que vaut le prompt, plus ce qu'il pèse
+
+En tête de carte s'affichait la LONGUEUR : la mesure exacte de la seule
+chose qui ne dit rien de la qualité. Deux prompts de 3 800 caractères,
+l'un sans oracle et l'autre qui tient la méthode, montraient le même
+chiffre. La longueur reste — en puce, avec ce qui se compte.
+
+À sa place, une **note sur 10 du juge**, et une jauge à trois bandes
+peintes à demeure (rouge sous 6, orange de 6 à 8, vert au-delà) : on lit
+où tombe un 7,5 et de combien il s'en faut pour passer au vert. Une barre
+qui change seulement de couleur ne dit ni l'un ni l'autre. Le repère
+traverse l'épaisseur de l'arc et ne part pas du centre — mesuré, une
+aiguille depuis le centre barrait le chiffre.
+
+Quatre choix qui portent le reste :
+
+- **Un seul juge, un seul appel.** Il note ET audite dans la même réponse.
+  Deux appels, c'étaient deux jugements du même texte qui pouvaient se
+  contredire — une note de 8,5 au-dessus de trois failles graves, et rien
+  pour dire lequel croire. Il tourne tout seul après chaque version ;
+  c'est le prix d'une note toujours à l'écran, et il est visible dans la
+  puce « juge » du compteur de dépense.
+- **La note globale n'est pas la moyenne** : elle ne dépasse pas de plus
+  de 2 points le plus faible des six critères. Sans cette règle, cinq
+  critères à 9 et un vérificateur à 2 donnaient 7,8 — « bon prompt » pour
+  un prompt sans oracle. Si le juge oublie la note globale, c'est le
+  maillon faible qui la remplace, jamais la moyenne.
+- **Rien n'est cru sur parole.** `normalizeNote` reconstruit champ par
+  champ et borne : une note de 47 — déjà vue quand un modèle note sur
+  100 — deviendrait une aiguille hors cadran sans que rien ne le signale.
+  Les fichiers importés passent par le même normaliseur.
+- **La note porte le numéro de sa version** (`pourVersion`). Le juge
+  répond après que la version est enregistrée : sans ce numéro, la note
+  de la v2 restait affichée au-dessus de la v3 pendant les vingt secondes
+  du jugement — un chiffre juste, sur le mauvais prompt.
+
+Elle vit où vit le prompt : dans l'entrée de bibliothèque **et** sur son
+tour du fil. Un tour coupé garde le chiffre et perd les six critères —
+c'est ce qu'on relit dans un fil ancien (« la v3 valait 8,5, la v4 est
+retombée à 6 ») et cela ne pèse rien.
+
+## 22. Une génération s'arrête
+
+Elle dure des dizaines de secondes, enchaîne jusqu'à cinq réparations puis
+un jugement. La seule façon de reprendre la main était de recharger la
+page — et de perdre ce qui n'était pas encore enregistré.
+
+Le bouton coupe **l'appel réseau en cours**, pas un drapeau que la boucle
+regarderait entre deux tentatives : une réparation qui vient de partir
+tient encore une minute, et pendant cette minute le bouton n'aurait rien
+fait — ce qui se lit comme un bouton cassé. Un même `AbortController` par
+départ couvre donc la génération, ses réparations et le juge qui enchaîne.
+
+`Arret` est une erreur À PART, reconnaissable : un arrêt voulu n'est pas
+une panne. Il ne s'affiche pas en rouge d'échec, n'invente pas de verdict
+de juge, et le tour qu'il laisse au fil est marqué *coupé* — il porte une
+ligne d'état, pas un prompt, donc ni copie ni remise en place. Rien n'est
+écrasé : la version en place n'a pas bougé, ce que le message dit.
+
+Il est posé **à côté du temps écoulé** : c'est la ligne qu'on regarde
+pendant qu'on attend, et c'est là qu'on décide qu'on a assez attendu.
+
 ---
 
 ## Reste à la main de Gabriel

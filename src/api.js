@@ -60,11 +60,23 @@ export const looksLikeKey = (key) => /^sk-ant-[A-Za-z0-9_-]{20,}$/.test(String(k
 const STALL_MS = 60000; // silence toléré entre deux morceaux
 const HARD_MS = 300000; // plafond absolu d'un seul appel
 
+/* Levée quand C'EST L'UTILISATEUR qui arrête, et reconnaissable comme
+   telle : un arrêt volontaire n'est pas une panne, et l'atelier ne doit ni
+   l'afficher en rouge, ni le confondre avec un silence du modèle. */
+export class Arret extends Error {
+  constructor() {
+    super("Arrêté.");
+    this.name = "Arret";
+    this.arret = true;
+  }
+}
+
 export async function callClaude(
   messages,
-  { apiKey, model, maxTokens = 4000, system, onDelta } = {}
+  { apiKey, model, maxTokens = 4000, system, onDelta, signal } = {}
 ) {
   if (!apiKey) throw new Error("Aucune clé API — ouvre les réglages et colle la tienne.");
+  if (signal?.aborted) throw new Arret();
 
   const payload = { model, max_tokens: maxTokens, messages, stream: true };
   if (system) payload.system = system;
@@ -78,7 +90,19 @@ export async function callClaude(
 
   const controller = new AbortController();
   let expired = "";
+  let arrete = false;
   let stall;
+
+  /* L'arrêt demandé par l'utilisateur passe par le MÊME contrôleur que les
+     délais : un seul point d'abandon, donc un seul chemin à vérifier. Le
+     drapeau distingue ensuite les trois causes possibles — arrêt voulu,
+     silence du modèle, plafond de durée — qui n'appellent pas la même
+     phrase à l'écran. */
+  const arreter = () => {
+    arrete = true;
+    controller.abort();
+  };
+  signal?.addEventListener("abort", arreter, { once: true });
 
   /* Réarmé à chaque morceau : un modèle lent reste acceptable, un modèle
      muet ne l'est pas. */
@@ -96,6 +120,7 @@ export async function callClaude(
   const disarm = () => {
     clearTimeout(stall);
     clearTimeout(hard);
+    signal?.removeEventListener("abort", arreter);
   };
 
   let response;
@@ -114,6 +139,7 @@ export async function callClaude(
     });
   } catch {
     disarm();
+    if (arrete) throw new Arret();
     if (expired) throw new Error(expired);
     throw new Error("Le navigateur n'a pas pu joindre api.anthropic.com (réseau ou blocage).");
   }
@@ -174,6 +200,7 @@ export async function callClaude(
       }
     }
   } catch (error) {
+    if (arrete) throw new Arret();
     if (expired) throw new Error(expired);
     throw error;
   } finally {

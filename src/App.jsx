@@ -11,6 +11,8 @@ import {
   DEFAULT_WRITER,
   HARD_LIMIT,
   MODELS,
+  auditInstruction,
+  bandeDe,
   baseConvoFor,
   buildMeta,
   capLimit,
@@ -18,6 +20,7 @@ import {
   costOf,
   countChars,
   formatCost,
+  normalizeNote,
   parseJson,
   targetWindow,
   verifyPrompt,
@@ -27,6 +30,8 @@ import { MAX_ATTEMPTS, runVerifiedGeneration } from "./generate.js";
 import {
   appendTurn,
   canRestore,
+  fr,
+  noterDernierTour,
   downloadText,
   duplicateEntry,
   exportBundle,
@@ -151,6 +156,20 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   /* Quel tour du fil vient d'être copié — l'accusé « Copié ✓ » se pose sur
      ce bouton-là, pas sur les autres. */
   const [copiedTurn, setCopiedTurn] = useState(null);
+
+  /* La note du juge — ce que vaut le prompt, à la place de ce qu'il pèse.
+     `noteOuverte` n'est que l'état du « ⋯ » : le détail se déplie sur
+     demande, la jauge se lit sans rien ouvrir. */
+  const [note, setNote] = useState(null);
+  const [noteLoading, setNoteLoading] = useState(false);
+  const [noteOuverte, setNoteOuverte] = useState(false);
+
+  /* L'arrêt. Une génération dure des dizaines de secondes et enchaîne
+     jusqu'à cinq réparations puis un jugement : sans bouton, la seule
+     façon de reprendre la main était de recharger la page — et de perdre
+     ce qui n'était pas encore enregistré. */
+  const arretRef = useRef(null);
+  const [arretable, setArretable] = useState(false);
 
   /* Le fil de correction : ce qu'on a demandé, ce qui est sorti. Il vit
      dans l'entrée de bibliothèque — donc dans le profil de son
@@ -280,6 +299,12 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           /* Le texte s'affiche pendant qu'il arrive : une minute d'attente
              devient lisible au lieu de ressembler à un blocage. */
           onDelta: setStream,
+          /* Le bouton « Arrêter » coupe ICI, dans l'appel réseau. Poser un
+             drapeau que la boucle regarderait entre deux tentatives ne
+             suffisait pas : une réparation qui vient de partir tient
+             encore une minute, et pendant cette minute le bouton n'aurait
+             rien fait — ce qui se lit comme un bouton cassé. */
+          signal: arretRef.current?.signal,
         });
         addCost(role, costOf(model, usage));
         return text;
@@ -289,6 +314,26 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     },
     [apiKey, addCost]
   );
+
+  /* Ouvre un chantier interruptible et rend son signal. Chaque départ a le
+     sien : un contrôleur déjà avorté refuserait l'appel suivant. */
+  const ouvrirArret = () => {
+    arretRef.current = new AbortController();
+    setArretable(true);
+    return arretRef.current;
+  };
+  const fermerArret = () => {
+    arretRef.current = null;
+    setArretable(false);
+  };
+
+  /* Ce que fait le bouton. La boucle d'assertions vérifie le drapeau entre
+     deux tentatives — sans quoi elle relancerait une réparation aussitôt
+     après l'abandon de la précédente. */
+  const arreter = () => {
+    arretRef.current?.abort();
+  };
+  const estArret = (e) => Boolean(e && (e.arret || e.name === "Arret"));
 
   /* ---------- cœur : génération sous assertions ---------- */
   const generateVerified = (baseConvo, instruction) =>
@@ -328,13 +373,23 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
 
     setError("");
     setAudit(null);
+    setNote(null);
+    setNoteOuverte(false);
     setPrompt("");
     setVerif(null);
     setLog([]);
     setVersion(1);
+    /* Une idée neuve ouvre une entrée neuve. Sans ces deux lignes, la v1
+       qui suit s'enregistre par-dessus l'entrée encore active — celle du
+       prompt précédent — et son fil reste accroché dessous. Latent tant
+       que rien ne s'enregistrait avant la première correction ; visible
+       dès que le juge enregistre la v1 pour y poser sa note. */
+    setChat([]);
+    setActiveId(null);
     setSaveState("idle");
     setRunCost({ writer: 0, judge: 0 });
     setPhase("analyzing");
+    ouvrirArret();
 
     /* Plus de mode déclaré : l'idée dit d'elle-même si l'agent part de zéro
        ou s'intègre à un terrain existant. Imposer « nouvelle start-up » par
@@ -367,14 +422,20 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
         setPhase("questions");
       }
     } catch (e) {
-      setError(`L'analyse a échoué : ${e.message}`);
+      setError(estArret(e) ? "Arrêté. Rien n'a été écrasé — la version en place n'a pas bougé. Corrige ta demande et relance." : `L'analyse a échoué : ${e.message}`);
       setPhase("idle");
+    } finally {
+      fermerArret();
     }
   };
 
   /* ---------- phase 2 : génération ---------- */
   const generate = async (baseHistory, answersMap) => {
     setPhase("generating");
+    /* Son propre chantier : le bouton « Générer le prompt » l'appelle en
+       direct, sans passer par l'analyse — sans cela, ce départ-là était le
+       seul qu'on ne pouvait pas arrêter. */
+    ouvrirArret();
     pushLog("Génération du prompt — v1…");
 
     let instruction =
@@ -415,34 +476,113 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           `Le vérificateur n'est pas au vert après ${MAX_ATTEMPTS} tentatives. Le prompt est affiché — corrige à la main ou relance.`
         );
       }
+      /* Le juge enchaîne tout seul : la note est à l'écran sans qu'on ait
+         à la demander. Elle n'est pas attendue pour afficher le prompt —
+         la feuille est là, la jauge se remplit ensuite. */
+      const premier = appendTurn(chat, {
+        role: "atelier",
+        text: res.text,
+        version: 1,
+        count: res.check.count,
+        pass: res.check.pass,
+      });
+      setChat(premier);
+      await juger({ convo: res.convo, chatCourant: premier, versionCourante: 1, texte: res.text });
     } catch (e) {
-      setError(`La génération a échoué : ${e.message}`);
+      setError(estArret(e) ? "Arrêté. Rien n'a été écrasé — la version en place n'a pas bougé. Corrige ta demande et relance." : `La génération a échoué : ${e.message}`);
+      /* Arrêtée en route : on retombe là où l'on peut REPRENDRE — sur les
+         questions si elles ont été posées, sur l'idée sinon. */
       setPhase(answersMap ? "questions" : "idle");
+    } finally {
+      fermerArret();
     }
   };
 
-  /* ---------- phase 3 : audit juge LLM ---------- */
+  /* ---------- phase 3 : le juge — une seule voix ----------
+
+     Le juge note ET audite dans le MÊME appel. Deux appels séparés, c'était
+     deux jugements du même texte qui pouvaient se contredire : une note de
+     8,5 au-dessus d'une liste de trois failles graves, et rien pour dire
+     lequel des deux croire.
+
+     Il tourne tout seul après chaque version — c'est le prix d'une note
+     toujours à l'écran, et il est visible : la puce « juge » du compteur de
+     dépense le chiffre à chaque appel. Le bouton « Rejuger » ne sert qu'à
+     redemander un avis, il n'est plus la seule façon d'en avoir un. */
+  const juger = async ({ convo, chatCourant, versionCourante, texte }) => {
+    setNoteLoading(true);
+    try {
+      /* Le juge n'est jamais le modèle qui a produit : angles morts
+         corrélés (règle du playbook). */
+      const raw = await ask(
+        [...convo, { role: "user", content: auditInstruction() }],
+        settings.judge,
+        1600,
+        "judge"
+      );
+      const parsed = parseJson(raw);
+      const verdict = {
+        verdict: String(parsed.verdict || "").trim(),
+        failles: Array.isArray(parsed.failles) ? parsed.failles.slice(0, 3) : [],
+        hypotheses: Array.isArray(parsed.hypotheses) ? parsed.hypotheses.slice(0, 3) : [],
+      };
+      const n = normalizeNote(
+        { ...parsed, pourVersion: versionCourante ?? version },
+        settings.judge
+      );
+      setAudit(verdict);
+      setNote(n);
+
+      /* La note entre dans le fil et dans l'entrée : elle survit au
+         rechargement et suit d'un appareil à l'autre, comme le prompt.
+         Sans cela, rouvrir un prompt de la casse rendait une jauge vide
+         et il fallait repayer le juge pour un chiffre déjà obtenu. */
+      if (n && texte) {
+        const noté = noterDernierTour(chatCourant ?? chat, n);
+        setChat(noté);
+        await persistWork({
+          text: texte,
+          version: versionCourante ?? version,
+          chat: noté,
+          count: countChars(texte),
+          note: n,
+        });
+        setSaveState("saved");
+      }
+      return n;
+    } catch (e) {
+      /* Arrêté : pas de note, et surtout pas de faux verdict. La jauge
+         retombe sur « pas encore jugé », ce qui est exactement vrai. */
+      if (!estArret(e)) {
+        setAudit({ verdict: `L'audit a échoué : ${e.message}`, failles: [], hypotheses: [] });
+      }
+      return null;
+    } finally {
+      setNoteLoading(false);
+    }
+  };
+
+  /* Le bouton : rejuger la version affichée, avec la conversation qu'on a
+     sous la main (celle du modèle si elle existe encore, sinon celle qu'on
+     reconstruit — un prompt rouvert de la casse n'a plus d'historique). */
   const runAudit = async () => {
+    if (!prompt) return;
     setAuditLoading(true);
     setAudit(null);
+    const convo = history.length
+      ? history
+      : baseConvoFor({
+          idea: idea + (constraints.trim() ? `\n\nCONTRAINTES IMPOSÉES :\n${constraints.trim()}` : ""),
+          prompt,
+          limit: settings.charLimit,
+        });
+    ouvrirArret();
     try {
-      const convo = [
-        ...history,
-        {
-          role: "user",
-          content:
-            "ÉTAPE 3 — Audit juge LLM du prompt ci-dessus, contre la méthode Boris. " +
-            'Réponds UNIQUEMENT avec ce JSON : {"verdict":"une phrase","failles":["..."],"hypotheses":["..."]} — ' +
-            "maximum 3 failles réelles (tableau vide si aucune), maximum 3 hypothèses implicites que l'utilisateur doit connaître. Phrases courtes.",
-        },
-      ];
-      // Le juge n'est jamais le modèle qui a produit : angles morts corrélés.
-      const raw = await ask(convo, settings.judge, 1600, "judge");
-      setAudit(parseJson(raw));
-    } catch (e) {
-      setAudit({ verdict: `L'audit a échoué : ${e.message}`, failles: [], hypotheses: [] });
+      await juger({ convo, texte: prompt });
+    } finally {
+      fermerArret();
+      setAuditLoading(false);
     }
-    setAuditLoading(false);
   };
 
   /* ---------- phase 4 : appliquer l'audit et régénérer ---------- */
@@ -454,6 +594,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     setAudit(null);
     setError("");
     setPhase("generating");
+    ouvrirArret();
     pushLog(`Application de l'audit → v${nextVersion}…`);
 
     /* L'audit entre au fil comme une correction : c'en est une, et le fil
@@ -520,9 +661,17 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           `Le vérificateur n'est pas au vert après ${MAX_ATTEMPTS} tentatives. Le prompt est affiché — corrige à la main ou relance.`
         );
       }
+      await juger({
+        convo: res.convo,
+        chatCourant: full,
+        versionCourante: nextVersion,
+        texte: res.text,
+      });
     } catch (e) {
-      setError(`La régénération a échoué : ${e.message}`);
+      setError(estArret(e) ? "Arrêté. Rien n'a été écrasé — la version en place n'a pas bougé. Corrige ta demande et relance." : `La régénération a échoué : ${e.message}`);
       setPhase("done");
+    } finally {
+      fermerArret();
     }
   };
 
@@ -536,6 +685,8 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     setVersion(1);
     setLog([]);
     setAudit(null);
+    setNote(null);
+    setNoteOuverte(false);
     setError("");
     setSaveState("idle");
     setChat([]);
@@ -550,14 +701,26 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
      rend son identifiant. C'est ce qui garantit qu'un fil de correction
      est TOUJOURS dans le profil, même si personne n'a cliqué
      « Sauvegarder ». */
-  const persistWork = async ({ text, version: v, chat: thread, count }) => {
+  const persistWork = async ({ text, version: v, chat: thread, count, note: n }) => {
     const now = new Date().toISOString();
 
     if (activeId && library.some((item) => item.id === activeId)) {
       await commit(
         library.map((item) =>
           item.id === activeId
-            ? { ...item, prompt: text, count, version: v, chat: thread, updatedAt: now }
+            ? {
+                ...item,
+                prompt: text,
+                count,
+                version: v,
+                chat: thread,
+                /* `n` absent ≠ « pas de note » : la version vient d'être
+                   écrite et le juge n'a pas encore répondu. Effacer la
+                   note ici ferait clignoter la jauge à chaque correction,
+                   puisqu'on enregistre AVANT de juger. */
+                ...(n ? { note: n } : {}),
+                updatedAt: now,
+              }
             : item
         )
       );
@@ -570,6 +733,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
       limit: settings.charLimit,
       version: v,
       chat: thread,
+      note: n,
     });
     await commit([entry, ...library]);
     setActiveId(entry.id);
@@ -601,6 +765,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     const withDemand = appendTurn(chat, { role: "moi", text: asked });
     setChat(withDemand);
     setPhase("generating");
+    ouvrirArret();
     pushLog(`Correction demandée → v${nextVersion}…`);
 
     try {
@@ -660,19 +825,32 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           `Le vérificateur n'est pas au vert après ${MAX_ATTEMPTS} tentatives. Le prompt est affiché — redemande une correction ou reprends la main.`
         );
       }
+      await juger({
+        convo: res.convo,
+        chatCourant: full,
+        versionCourante: nextVersion,
+        texte: res.text,
+      });
     } catch (e) {
-      setError(`La correction a échoué : ${e.message}`);
+      const stop = estArret(e);
+      setError(stop ? "Arrêté. Rien n'a été écrasé — la version en place n'a pas bougé. Corrige ta demande et relance." : `La correction a échoué : ${e.message}`);
       setPhase("done");
-      /* La demande reste dans le fil : elle dit ce qui a été tenté. */
+      /* La demande reste dans le fil : elle dit ce qui a été tenté. Le
+         tour de réponse est marqué COUPÉ — il ne porte pas un prompt mais
+         une ligne d'état, et ni le bouton copier ni la remise en place ne
+         doivent s'y accrocher. */
       setChat(
         appendTurn(withDemand, {
           role: "atelier",
-          text: `Échec — ${e.message}`,
+          text: stop ? `Arrêté — la v${version} reste en place.` : `Échec — ${e.message}`,
           version,
           count: countChars(prompt),
           pass: false,
+          compacted: true,
         })
       );
+    } finally {
+      fermerArret();
     }
   };
 
@@ -688,6 +866,8 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     setQuestions([]);
     setAnswers({});
     setAudit(null);
+    setNote(item.note || null);
+    setNoteOuverte(false);
     setLog([]);
     setError("");
     setDemand("");
@@ -812,7 +992,8 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
 
   /* Le prompt affiché n'est pas encore une entrée : on en fabrique une, le
      temps de l'imprimer ou de la télécharger. Elle n'est pas enregistrée. */
-  const currentEntry = () => makeEntry({ idea, prompt, limit: settings.charLimit, version });
+  const currentEntry = () =>
+    makeEntry({ idea, prompt, limit: settings.charLimit, version, note: noteCourante });
 
   /* ---------- impression ----------
      La feuille sort du #root par un portail : la règle d'impression masque
@@ -840,16 +1021,24 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   /* Le temps écoulé s'affiche : c'est ce qui manquait pour distinguer une
      génération lente d'une génération bloquée. */
   useEffect(() => {
-    if (!busy && !auditLoading) {
+    /* Le jugement compte aussi : il enchaîne après la génération, phase
+       « done », et le chronomètre s'arrêtait pile au moment où l'attente
+       devenait inexplicable. */
+    if (!busy && !auditLoading && !noteLoading) {
       setElapsed(0);
       return;
     }
     const started = Date.now();
     const tick = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000);
     return () => clearInterval(tick);
-  }, [busy, auditLoading]);
+  }, [busy, auditLoading, noteLoading]);
 
-  const gauge = Math.min(100, Math.round((count / settings.charLimit) * 100));
+  /* La note affichée n'est JAMAIS celle d'une autre version. Le juge répond
+     après coup ; sans ce garde-fou, la note de la v2 restait au-dessus de la
+     v3 pendant les vingt secondes du jugement — un chiffre juste, sur le
+     mauvais prompt. */
+  const noteCourante =
+    note && (note.pourVersion == null || note.pourVersion === version) ? note : null;
 
   const shown = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -858,9 +1047,6 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
       `${item.title} ${item.idea} ${item.prompt}`.toLowerCase().includes(needle)
     );
   }, [library, search]);
-
-  const tone =
-    phase === "generating" ? "var(--ember)" : verif?.pass ? "var(--signal)" : "var(--alarm)";
 
   return (
     <div className="atelier pb-24">
@@ -1228,35 +1414,89 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           >
             <div className="section-head">
               <span className="section-num">02</span>
-              <span className="section-title">Vérificateur</span>
+              <span className="section-title">Ce que vaut ce prompt</span>
               <span className="section-line" />
               <span className="tag tag-accent">v{version}</span>
             </div>
 
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <div
-                  className={`counter ${phase === "generating" ? "pulse" : ""}`}
-                  style={{ color: tone }}
-                >
-                  {phase === "generating" && !prompt ? "····" : count}
-                </div>
-                <div className="mono mt-1 text-[11px]" style={{ color: "var(--muted-2)" }}>
-                  caractères · limite {settings.charLimit} · compte réel
+            {/* ---- la note, à la place du compte de caractères ----
+                Le grand nombre était la longueur : la mesure exacte de la
+                seule chose qui ne dit rien de la qualité. Deux prompts de
+                3 800 caractères, l'un sans oracle et l'autre qui tient la
+                méthode, affichaient le même chiffre. La longueur n'a pas
+                disparu — elle est passée en puce, avec le reste de ce qui
+                se compte. */}
+            <div className="note-rangee">
+              <JaugeNote
+                note={noteCourante}
+                encours={noteLoading || (phase === "generating" && !prompt)}
+              />
+
+              <div className="note-flanc">
+                {noteCourante ? (
+                  <>
+                    <p className="note-mot">{bandeDe(noteCourante.note).mot}</p>
+                    {noteCourante.verdict && <p className="note-verdict">{noteCourante.verdict}</p>}
+                  </>
+                ) : (
+                  <p className="note-mot" style={{ color: "var(--muted-2)" }}>
+                    {noteLoading ? "Le juge lit le prompt…" : "Pas encore jugé."}
+                  </p>
+                )}
+
+                <div className="mono mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+                  <button
+                    className="note-plus"
+                    type="button"
+                    aria-expanded={noteOuverte}
+                    title="Voir le détail de la note"
+                    onClick={() => setNoteOuverte((v) => !v)}
+                    disabled={!noteCourante}
+                  >
+                    ⋯
+                  </button>
+                  <span className={verif?.pass ? "tag tag-ok" : "tag tag-ko"}>
+                    {count} car. · limite {settings.charLimit}
+                  </span>
+                  {noteCourante?.juge && <span className="tag">juge {noteCourante.juge}</span>}
                 </div>
               </div>
-
-              {phase === "done" && verif && (
-                <span className={verif.pass ? "tag tag-ok" : "tag tag-ko"}>
-                  {verif.pass ? "✓ assertions au vert" : "✗ assertion échouée"}
-                </span>
-              )}
             </div>
 
-            <div className="gauge mt-5">
-              <span style={{ width: `${gauge}%`, background: tone }} />
-              <span className="gauge-ticks" />
-            </div>
+            {/* Le détail ne s'ouvre que si on le demande : la jauge se lit
+                sans rien déplier, et six critères ouverts d'office
+                repoussaient le prompt hors de l'écran. */}
+            {noteOuverte && noteCourante && (
+              <div className="card-inset note-detail mt-5 p-5">
+                {noteCourante.criteres.map((c) => (
+                  <div key={c.cle} className="critere">
+                    <div className="critere-tete">
+                      <span className="critere-nom">{c.nom}</span>
+                      <span className="critere-barre">
+                        <span
+                          style={{
+                            width: `${((c.note ?? 0) / 10) * 100}%`,
+                            background: bandeDe(c.note ?? 0).ton,
+                          }}
+                        />
+                      </span>
+                      <span
+                        className="critere-note mono"
+                        style={{ color: c.note == null ? "var(--muted-2)" : bandeDe(c.note).ton }}
+                      >
+                        {c.note == null ? "—" : fr(c.note)}
+                      </span>
+                    </div>
+                    {c.mot && <p className="critere-mot">{c.mot}</p>}
+                  </div>
+                ))}
+                <p className="mono critere-regle">
+                  La note globale n'est pas la moyenne : elle ne dépasse pas de plus de 2 points
+                  le plus faible des critères — sinon cinq critères à 9 et un vérificateur à 2
+                  donneraient « bon prompt ».
+                </p>
+              </div>
+            )}
 
             {/* Le compteur vit : il bouge à chaque appel, pendant la
                 génération comme à l'audit. Prompt = tous les appels du
@@ -1275,10 +1515,22 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
               </div>
             )}
 
-            {(busy || auditLoading) && (
-              <div className="mono mt-3 text-[11.5px]" style={{ color: "var(--muted-2)" }}>
-                › {elapsed} s écoulées
-                {stream ? ` · ${countChars(stream)} caractères reçus` : " · en attente du modèle…"}
+            {/* L'arrêt est À CÔTÉ du temps écoulé, pas ailleurs : c'est la
+                ligne qu'on regarde pendant qu'on attend, et c'est là qu'on
+                décide qu'on a assez attendu. Il coupe l'appel réseau en
+                cours — donc aussi la réparation qui vient de partir et le
+                juge qui enchaîne. */}
+            {(busy || auditLoading || noteLoading) && (
+              <div className="mono mt-3 flex flex-wrap items-center gap-3 text-[11.5px]">
+                <span style={{ color: "var(--muted-2)" }}>
+                  › {elapsed} s écoulées
+                  {stream ? ` · ${countChars(stream)} caractères reçus` : " · en attente du modèle…"}
+                </span>
+                {arretable && (
+                  <button className="btn btn-quiet btn-danger" type="button" onClick={arreter}>
+                    ⏹ Arrêter
+                  </button>
+                )}
               </div>
             )}
 
@@ -1317,7 +1569,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
                     onClick={runAudit}
                     disabled={auditLoading}
                   >
-                    {auditLoading ? "Audit en cours…" : "Audit juge LLM"}
+                    {auditLoading ? "Le juge relit…" : "Rejuger"}
                   </button>
                   <button
                     className="btn btn-quiet"
@@ -1341,8 +1593,12 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
 
             {audit && (
               <div className="card-inset mt-6 p-5">
-                <div className="eyebrow mb-3">Juge — {settings.judge}</div>
-                <p className="mb-4 text-[15px] leading-relaxed">{audit.verdict}</p>
+                {/* Le verdict est déjà à côté de la jauge : le répéter ici
+                    donnait deux fois la même phrase à dix centimètres
+                    d'écart. Ce panneau ne garde que ce qui appelle un
+                    GESTE — les failles, qu'on applique en une version de
+                    plus, et les hypothèses, qu'on doit connaître. */}
+                <div className="eyebrow mb-3">Ce que le juge reproche — {settings.judge}</div>
 
                 {audit.failles?.length ? (
                   <div className="mb-4">
@@ -1422,7 +1678,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
       )}
 
       {/* Il ne paraît que pendant un appel à Claude — tous les appels. */}
-      {(busy || auditLoading) && (
+      {(busy || auditLoading || noteLoading) && (
         <Penseur
           phase={phase}
           judging={auditLoading}
@@ -1700,6 +1956,85 @@ function Casse({
         />
       </div>
     </aside>
+  );
+}
+
+/* ================================================================
+   LA JAUGE DE LA NOTE
+
+   Un cadran de 180°, l'aiguille sur la note. Les trois bandes sont
+   PEINTES sur la piste — rouge sous 6, orange de 6 à 8, vert au-delà —
+   et non déduites de la note : on voit où tombe un 7,5 sans connaître le
+   barème, et on voit de combien il s'en faut pour passer au vert. Une
+   barre qui change seulement de couleur ne dit ni l'un ni l'autre.
+
+   Pure géométrie, aucune police : le chiffre est en HTML par-dessus, donc
+   il hérite de la fonte d'affichage et reste net à toute densité.
+   ================================================================ */
+
+const R = 78;
+const CX = 100;
+const CY = 96;
+
+/* note 0 → 180° (à gauche), note 10 → 0° (à droite). */
+const angleDe = (n) => 180 - 18 * Math.min(10, Math.max(0, n));
+const pointDe = (n) => {
+  const a = (angleDe(n) * Math.PI) / 180;
+  return [CX + R * Math.cos(a), CY - R * Math.sin(a)];
+};
+const arcDe = (de, a) => {
+  const [x1, y1] = pointDe(de);
+  const [x2, y2] = pointDe(a);
+  return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${R} ${R} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+};
+
+function JaugeNote({ note, encours }) {
+  const valeur = note ? note.note : null;
+  const ton = valeur == null ? "var(--muted-2)" : bandeDe(valeur).ton;
+  /* Le repère traverse l'ÉPAISSEUR de l'arc ; il ne part pas du centre.
+     Mesuré : une aiguille depuis le centre passait à travers le chiffre —
+     à 7,5 elle barrait le « 5 ». Ici rien n'entre dans le cadran. */
+  const rad = (angleDe(valeur ?? 0) * Math.PI) / 180;
+  const dx = Math.cos(rad);
+  const dy = -Math.sin(rad);
+
+  return (
+    <div className={`jauge-note${encours ? " pulse" : ""}`}>
+      <svg
+        viewBox="0 0 200 118"
+        role="img"
+        aria-label={valeur == null ? "Pas encore jugé" : `Note ${fr(valeur)} sur 10`}
+      >
+        {/* Le barème est peint À DEMEURE : on voit où tombe un 7,5 et de
+            combien il s'en faut pour passer au vert. Une barre qui change
+            seulement de couleur ne dit ni l'un ni l'autre. */}
+        <path className="bande" d={arcDe(0, 6)} stroke="var(--alarm)" />
+        <path className="bande" d={arcDe(6, 8)} stroke="var(--ember)" />
+        <path className="bande" d={arcDe(8, 10)} stroke="var(--signal)" />
+
+        {valeur != null && valeur > 0 && (
+          <path className="rempli" d={arcDe(0, valeur)} stroke={ton} />
+        )}
+
+        {valeur != null && (
+          <line
+            className="repere"
+            x1={CX + dx * (R - 10)}
+            y1={CY + dy * (R - 10)}
+            x2={CX + dx * (R + 10)}
+            y2={CY + dy * (R + 10)}
+          />
+        )}
+
+        <text className="jauge-bout" x="9" y="116">0</text>
+        <text className="jauge-bout" x="191" y="116">10</text>
+      </svg>
+
+      <div className="jauge-chiffre" style={{ color: ton }}>
+        {valeur == null ? (encours ? "···" : "—") : fr(valeur)}
+        <span className="jauge-sur">/10</span>
+      </div>
+    </div>
   );
 }
 
