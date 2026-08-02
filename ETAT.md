@@ -1,11 +1,47 @@
 # État du run
 
 **EN PRODUCTION** — https://boris-prompt-generator.vercel.app
-Déployée sur ordre de Gabriel le 2026-08-01, **122 assertions au vert sur
-l'alias stable**, zéro échec — et, ce qui compte davantage, **le parcours
-entier conduit au clic dans un vrai navigateur** : porte, génération,
-correction en v2, autre appareil, 320 px, suppression. Voir « L'audit au
-pilotage » plus bas.
+Redéployée le **2026-08-02** sur demande de Gabriel (commit `c370bb7`) :
+**183 assertions au vert sur l'alias stable**, zéro échec, après 183
+identiques sur la preview `…-6tiwukqfe`. Le JavaScript servi est
+**byte-identique** au build local (SHA-256 `8bfbc909…`) — seul le nom de
+fichier diffère, la construction distante hache un graphe légèrement
+différent.
+
+**La leçon du jour, et elle a coûté une matinée à Gabriel : le vert local
+ne met rien en ligne.** Deux chantiers finis et vérifiés — la note du juge,
+le bouton Arrêter — sont restés **non commités et non déployés** pendant que
+la production servait la version de la veille (18:35, 13 h de retard). Le
+commit du matin lui-même (« le fil au pupitre ») n'y était pas. Gabriel a
+donc cherché à l'écran une jauge, un bouton d'arrêt et un fil déplacé qui
+n'existaient que sur ce disque. **Un chantier n'est pas fini tant qu'il n'est
+pas en ligne** : commit et déploiement font partie du chantier, pas de la
+clôture de session.
+
+Avant cela : déployée sur ordre de Gabriel le 2026-08-01, 122 assertions au
+vert, et **le parcours entier conduit au clic dans un vrai navigateur** :
+porte, génération, correction en v2, autre appareil, 320 px, suppression.
+Voir « L'audit au pilotage » plus bas.
+
+## La note du juge, et l'arrêt — 2026-08-02
+
+En tête de carte, le grand chiffre n'est plus la longueur mais une **note
+sur 10 du juge**, sur une jauge à trois bandes peintes à demeure. Un seul
+juge, un seul appel : il note ET audite dans la même réponse. La note
+globale n'est pas la moyenne, rien n'est cru sur parole (`normalizeNote`
+borne et reconstruit), et elle porte le numéro de sa version. Elle vit dans
+l'entrée de bibliothèque et sur son tour du fil — donc elle survit au
+rechargement et suit d'un appareil à l'autre. Motifs en `DECISIONS.md` § 21.
+
+Et un bouton **⏹ Arrêter**, posé à côté du temps écoulé : il coupe l'appel
+réseau en cours — pas un drapeau lu entre deux tentatives —, donc aussi la
+réparation qui vient de partir et le juge qui enchaîne. `Arret` est une
+erreur à part : un arrêt voulu ne s'affiche pas en rouge d'échec et
+n'écrase pas la version en place. `DECISIONS.md` § 22.
+
+**Le fil reste à gauche** (le pupitre) — arbitré par Gabriel le 2026-08-02
+après qu'il l'a cherché à droite. La décision § 20 tient : deux panneaux à
+gauche ne laissaient plus de milieu au prompt, mais un seul, oui.
 
 ## La casse, à gauche
 
