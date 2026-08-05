@@ -509,6 +509,58 @@ section("Fil de correction");
   assert("elle interdit de commenter la correction", consigne.includes("aucune phrase qui parle"));
 }
 
+/* ---------- 1 quater. poser un code et le reconnaître ----------
+
+   Deux chemins touchent le même secret : `scripts/seed.mjs` l'ÉCRIT,
+   `/api/login` le RELIT. Ils normalisaient différemment — la porte coupait
+   les blancs de bord, la graine non — donc la graine pouvait poser un code
+   que la porte ne pouvait plus jamais accepter, et le refus s'affichait
+   « Code refusé ». Ces assertions tournent en Node, sans réseau ni magasin :
+   c'est la seule façon de prouver l'accord des deux chemins sans essayer un
+   vrai code sur une vraie porte. */
+
+section("Codes — écrire et relire");
+
+{
+  const { hashCode, verifyCode } = await import("../api/_lib/crypto.js");
+  const { normalizeCode } = await import("../api/_lib/http.js");
+
+  /* Ce que la graine pose passe la porte, y compris quand la saisie est sale. */
+  for (const brut of ["1234abcd", "  1234abcd  ", "1234abcd\n", "\t1234abcd"]) {
+    const clean = normalizeCode(brut);
+    const hash = await hashCode(clean);
+    assert(
+      `un code semé depuis « ${JSON.stringify(brut)} » ouvre la porte`,
+      Boolean(clean) && (await verifyCode(normalizeCode(brut), hash))
+    );
+  }
+
+  /* Et le piège d'origine, énoncé tel qu'il s'est produit : un condensat pris
+     sur le code BRUT ne reconnaît plus le code que l'utilisateur tape. */
+  const naif = await hashCode("  1234abcd  ");
+  assert(
+    "hacher le code brut rend le compte inaccessible",
+    !(await verifyCode(normalizeCode("  1234abcd  "), naif)),
+    "c'est le défaut que la graine ne doit plus pouvoir commettre"
+  );
+
+  assert("normalizeCode est idempotente", normalizeCode(normalizeCode("  1234abcd ")) === "1234abcd");
+  assert("un code de 3 caractères est refusé", normalizeCode("abc") === null);
+  assert("un code de 4 caractères passe", normalizeCode("abcd") === "abcd");
+  assert("65 caractères sont refusés", normalizeCode("x".repeat(65)) === null);
+  /* La casse compte, et c'est un piège de saisie, pas un défaut : un code qui
+     finit par une lettre majuscule doit être tapé avec sa majuscule. Sur
+     téléphone, un champ de type mot de passe ne met JAMAIS de majuscule
+     automatique — la même personne entre le même code et se voit refusée.
+     Aucun code réel n'apparaît ici : le dépôt est public. */
+  assert("la casse n'est PAS neutralisée", normalizeCode("motDePasse") === "motDePasse");
+  assert(
+    "deux casses différentes donnent deux codes différents",
+    !(await verifyCode("motdepasse", await hashCode("motDePasse"))),
+    "un code avec une majuscule doit être tapé avec sa majuscule"
+  );
+}
+
 /* ---------- 2. l'accès ---------- */
 
 if (!BASE) {
@@ -534,9 +586,39 @@ if (!BASE) {
     !anon.body?.sharedKey && !JSON.stringify(anon.body).includes("sk-ant-")
   );
 
-  const wrong = await call("/api/login", "POST", { id: USER, code: "code-manifestement-faux" });
-  assert("mauvais code bloqué", wrong.status === 401, `reçu ${wrong.status}`);
-  assert("aucun cookie posé sur échec", !wrong.cookie);
+  /* ---------- chaque prénom de la porte a VRAIMENT un code ----------
+
+     L'assertion au-dessus disait « ajouter quelqu'un et oublier de le semer
+     ne doit pas passer inaperçu ». Elle ne le prouvait pas : elle relit la
+     liste servie par /api/session, donc le contenu de USERS — pas le magasin.
+     Une carte se dessine à la porte pour qui n'a aucun code, et la seule
+     personne à le découvrir est celle qui essaie d'entrer.
+
+     Mesuré le 2026-08-05 sur Cécile. Les cinq codes avaient été réémis le
+     2026-08-02 et l'état du dépôt le dit lui-même : « vérifié en production
+     sur TROIS comptes ». Les deux autres n'ont jamais été essayés, et rien
+     ici ne les essayait non plus.
+
+     La sonde n'a besoin d'AUCUN code : elle envoie un code délibérément faux
+     et lit la différence que le serveur fait déjà entre les deux situations —
+     401 « Code refusé » = un code est posé ; 409 = ce compte n'en a pas. */
+  for (const { id, name } of anon.body?.users || []) {
+    const probe = await call("/api/login", "POST", { id, code: "sonde-deliberement-fausse" });
+    if (probe.status === 429) {
+      assert(`${name} — code en place`, false, "429 du limiteur : sonde non concluante, réessaie dans dix minutes");
+      continue;
+    }
+    assert(
+      `${name} — un code est bien posé dans le magasin`,
+      probe.status === 401,
+      probe.status === 401
+        ? "401 sur un code faux"
+        : probe.status === 409
+          ? `409 — AUCUN code posé : lance \`node scripts/seed.mjs ${id}=<code>\``
+          : `reçu ${probe.status} ${probe.body?.error || ""}`
+    );
+    assert(`${name} — aucun cookie sur échec`, !probe.cookie);
+  }
 
   if (!CODE) {
     console.log("… suite ignorée : VERIFY_CODE non fourni.");

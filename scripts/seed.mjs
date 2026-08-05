@@ -11,6 +11,7 @@
 
 import { readFileSync } from "node:fs";
 import { hashCode } from "../api/_lib/crypto.js";
+import { normalizeCode } from "../api/_lib/http.js";
 
 loadEnvFile(".env.local");
 loadEnvFile(".env");
@@ -34,18 +35,34 @@ if (!pairs.length) {
   process.exit(1);
 }
 
+/* On pose EXACTEMENT ce que la porte acceptera.
+
+   `normalizeCode` est la fonction de `api/_lib/http.js` que `/api/login`
+   applique à chaque tentative — importée, pas recopiée : deux normalisations
+   qui se ressemblent finissent toujours par diverger. Ici on semait le
+   code brut (`hashCode` normalise en NFKC mais ne coupe pas les blancs) alors
+   que la porte, elle, coupe les blancs de bord. Un code semé avec une espace
+   au bout — d'un copier-coller, d'une ligne de commande — était donc
+   irrecevable pour toujours, et le refus disait « Code refusé » : le mot qui
+   fait douter de son code, jamais du magasin. */
+const normalized = [];
 for (const [id, code] of pairs) {
   if (!KNOWN.includes(id)) {
     console.error(`Prénom inconnu : ${id}`);
     process.exit(1);
   }
-  if (!code || code.length < 4) {
-    console.error(`Code trop court pour ${id} (4 caractères minimum).`);
+  const clean = normalizeCode(code);
+  if (!clean) {
+    console.error(`Code refusé pour ${id} : 4 à 64 caractères, blancs de bord retirés.`);
     process.exit(1);
   }
+  if (clean !== code) {
+    console.error(`  ⚠ ${id} — le code a été nettoyé (blancs de bord ou forme Unicode) ; c'est la forme nettoyée qui est posée.`);
+  }
+  normalized.push([id, clean]);
 }
 
-for (const [id, code] of pairs) {
+for (const [id, code] of normalized) {
   const hash = await hashCode(code);
   await command(["SET", `bpg:user:${id}:code`, hash]);
   console.log(`✓ ${id} — code posé (scrypt, ${hash.length} caractères de condensat)`);
