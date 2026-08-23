@@ -2,14 +2,24 @@
 
 **EN PRODUCTION** — https://boris-prompt-generator.vercel.app
 
-Dernier déploiement : **2026-08-23, commit `2993646`**, poussé sur
-`origin/main`, arbre propre. Vérifié sur l'alias stable : **297 assertions
-au harnais** (`npm run verify` avec `BASE_URL`, sans `VERIFY_CODE` — les
-parcours derrière la porte sont donc ignorés), zéro échec. Le JavaScript
-servi est **byte-identique** au build local (SHA-256 `4bb5c56a…`) — seul le
-nom de fichier diffère, la construction distante hache un graphe légèrement
-différent. **`npm run pilotage` n'a pas été rejoué** (Playwright absent de la
-machine) : c'est la dette de ce déploiement.
+Dernier déploiement : **2026-08-23, commit `b1b50dd`**, poussé sur
+`origin/main`, arbre propre. Vérifié sur l'alias stable **avec** `VERIFY_CODE`,
+donc parcours d'accès compris : zéro échec.
+
+Le JavaScript servi est byte-identique au build local. **La feuille de style,
+non — et c'est bénin, vérifié règle par règle** : la construction distante
+contient DEUX règles utilitaires de plus (`.blur`, `.resize`), et **aucune
+règle locale ne lui manque**. Tailwind v4 devine ses classes en balayant les
+sources : les mots `blur` et `resize` existent dans notre propre CSS, et le
+build distant, qui restaure un cache, n'en retient pas exactement le même jeu.
+Deux classes inutilisées de plus, aucune différence de comportement. Comparer
+les hachages ne suffit donc plus à conclure sur le CSS : il faut comparer les
+RÈGLES, et c'est ce qui a été fait ici (les deux règles corrigées sont
+identiques des deux côtés).
+
+**`npm run pilotage` n'a toujours pas été rejoué** (Playwright absent de la
+machine) : c'est la dette de ce déploiement. Le harnais éprouve désormais le
+palier à 1800 px, mais il mesure des hauteurs — il ne clique pas.
 
 Déploiement précédent : 2026-08-02, commit `e87cbf3`, 228 au harnais + 142 au
 pilotage.
