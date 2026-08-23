@@ -2,20 +2,27 @@
 
 **EN PRODUCTION** — https://boris-prompt-generator.vercel.app
 
-Dernier déploiement : **2026-08-02, commit `e87cbf3`**, poussé sur
-`origin/main`, arbre propre. Vérifié sur l'alias stable avec **les deux
-instruments** : **228 assertions au harnais** (`npm run verify` avec
-`BASE_URL`) + **142 au pilotage** (`npm run pilotage`), zéro échec. Le
-JavaScript servi est **byte-identique** au build local (SHA-256
-`feaaa8c8…`) — seul le nom de fichier diffère, la construction distante
-hache un graphe légèrement différent.
+Dernier déploiement : **2026-08-23, commit `2993646`**, poussé sur
+`origin/main`, arbre propre. Vérifié sur l'alias stable : **297 assertions
+au harnais** (`npm run verify` avec `BASE_URL`, sans `VERIFY_CODE` — les
+parcours derrière la porte sont donc ignorés), zéro échec. Le JavaScript
+servi est **byte-identique** au build local (SHA-256 `4bb5c56a…`) — seul le
+nom de fichier diffère, la construction distante hache un graphe légèrement
+différent. **`npm run pilotage` n'a pas été rejoué** (Playwright absent de la
+machine) : c'est la dette de ce déploiement.
 
-## 2026-08-23 — une seconde technique, en local, PAS en ligne
+Déploiement précédent : 2026-08-02, commit `e87cbf3`, 228 au harnais + 142 au
+pilotage.
+
+## 2026-08-23 — une seconde technique, EN PRODUCTION
 
 L'atelier sait produire **deux** familles de prompts : la méthode Boris, et la
 **boucle du gantelet** (technique de Matt Shumer, skill de RoboNuggets, CC BY
 4.0 — voir DECISIONS § 27). Le choix se fait sur deux tuiles au-dessus de
 l'idée ; tout le reste de l'écran suit la technique armée.
+
+**En ligne depuis le 2026-08-23**, deux commits (`b7aa5d1` la technique,
+`2993646` la surface mobile qui manquait), preview vérifiée avant promotion.
 
 **Ce qui est vrai à cette heure :**
 
@@ -37,8 +44,11 @@ l'idée ; tout le reste de l'écran suit la technique armée.
   harnais couvre désormais les quatre largeurs de la nouvelle surface ; il ne
   remplace toujours pas un parcours au clic.
 
-**Reprise :** installer Playwright et rejouer `npm run pilotage` sur la
-production, en exerçant le parcours du gantelet au clic.
+**La seule dette de ce déploiement :** installer Playwright et rejouer
+`npm run pilotage` sur la production, en exerçant le parcours du gantelet au
+clic (barres proposées, barre choisie, prompt, note, audit → v2). Le harnais
+prouve que rien ne déborde et que l'écran suit la technique ; il ne prouve
+pas qu'on peut cliquer d'un bout à l'autre.
 
 Fichiers touchés : `src/gauntlet.js` (neuf), `src/techniques.js` (neuf),
 `src/App.jsx`, `src/meta.js`, `src/generate.js`, `src/library.js`,
