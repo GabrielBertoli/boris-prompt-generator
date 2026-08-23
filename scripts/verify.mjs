@@ -1338,6 +1338,51 @@ const SURFACES = [
       }
     },
   },
+  /* TROISIÈME surface, et elle manquait : les deux autres ouvrent sur un
+     prompt déjà là, donc la carte de l'idée y est REPLIÉE — et le choix de
+     la technique, qui vit dedans, n'était mesuré à aucune largeur. C'est
+     exactement la forme du défaut que ce dépôt a déjà payé une fois (la
+     barre supérieure qui débordait de 15 px à 320). Une grille à deux
+     colonnes qui ne retombe pas sur une seule ne se voit pas autrement. */
+  {
+    label: "atelier neuf",
+    marker: "Boucle du gantelet",
+    routes: {
+      "/api/session": {
+        ok: true,
+        authenticated: true,
+        user: { id: "sonde", name: "Sonde", email: "" },
+        users: [],
+      },
+      "/api/prompts": { ok: true, items: [] },
+      "/api/usage": { ok: true, total: 0 },
+    },
+    /* Le gantelet est armé AVANT l'application : c'est la technique qui
+       n'existait pas, donc celle dont l'écran n'a jamais été mesuré. */
+    action: `<script>
+      localStorage.setItem("atelier-boris:reglages", JSON.stringify({
+        writer: "claude-sonnet-5", judge: "claude-opus-5",
+        technique: "gauntlet", charLimit: 3900, charLimitGauntlet: 1300
+      }));
+    </script>`,
+    check(dom) {
+      const tuiles = (dom.match(/class="technique(?: technique-active)?"/g) || []).length;
+      assert("les deux techniques sont proposées", tuiles === 2, `${tuiles} tuile(s)`);
+      const active = /class="technique technique-active"[\s\S]{0,400}?technique-nom">([^<]*)</.exec(dom);
+      assert(
+        "celle qui est armée est celle qui est marquée",
+        active?.[1] === "Boucle du gantelet",
+        active?.[1] || "aucune tuile active"
+      );
+      /* L'écran suit la technique : bandeau, accroche et exemple du champ
+         vide viennent d'elle. Laissés en dur, ils parlaient d'échecs et de
+         « TON PRODUIT » à quelqu'un venu écrire une page de tarifs. */
+      assert("le bandeau est celui du gantelet", dom.includes("But — Barre — Critique — Victoire"));
+      assert("l'accroche aussi", dom.includes("des références réelles à battre"));
+      assert("et l'exemple du champ vide", dom.includes("aussi bonne que celle de Stripe"));
+      assert("la limite affichée est la sienne", /limite 1300 car\./.test(dom));
+    },
+  },
 ];
 
 if (!existsSync(CHROME) || !bundle) {

@@ -19,20 +19,26 @@ l'idée ; tout le reste de l'écran suit la technique armée.
 
 **Ce qui est vrai à cette heure :**
 
-- `npm run build` au vert, `npm run verify` **271 assertions au vert** (dont
-  **43 nouvelles** pour les techniques, et un aller-retour réel contre
-  `api.anthropic.com` qui a rendu un prompt de gantelet de 188 mots accepté du
-  premier coup).
+- `npm run build` au vert, `npm run verify` **283 assertions au vert** en local
+  (dont **43** pour les techniques et **12** pour la nouvelle surface mobile),
+  et un aller-retour réel contre `api.anthropic.com` qui a rendu un prompt de
+  gantelet de 188 mots accepté du premier coup.
 - Parcours complet éprouvé dans un Chrome réel, appel Anthropic simulé en flux :
   choix de la technique → 3 barres proposées → barre choisie → prompt au marbre
   (1 105 car., 183 mots) → note du juge 8,2 avec **sa** grille → audit → v2.
-- **Rien n'est déployé.** La production sert toujours la version du 2026-08-02.
-  `npm run pilotage` n'a PAS été rejoué (Playwright absent de la machine) : les
-  paliers responsive des deux tuiles et du panneau des barres ne sont donc
-  éprouvés qu'à 1 200 px, pas à 320.
+- **Une troisième surface au harnais mobile : « atelier neuf ».** Les deux
+  autres ouvrent sur un prompt déjà là, donc la carte de l'idée y est REPLIÉE —
+  et le choix de la technique, qui vit dedans, n'était mesuré à AUCUNE largeur.
+  Même forme de défaut que la barre supérieure qui débordait de 15 px à 320 px
+  (§ audit du 2026-08-01) : une grille à deux colonnes qui ne retomberait pas
+  sur une seule ne se serait vue nulle part. Mesuré : zéro débordement à 320,
+  360, 390 et 430 px, tuiles rendues.
+- `npm run pilotage` n'a PAS été rejoué (Playwright absent de la machine). Le
+  harnais couvre désormais les quatre largeurs de la nouvelle surface ; il ne
+  remplace toujours pas un parcours au clic.
 
-**Reprise :** installer Playwright, `npm run pilotage`, corriger ce qui déborde,
-puis déposer une preview et la faire valider avant toute mise en production.
+**Reprise :** installer Playwright et rejouer `npm run pilotage` sur la
+production, en exerçant le parcours du gantelet au clic.
 
 Fichiers touchés : `src/gauntlet.js` (neuf), `src/techniques.js` (neuf),
 `src/App.jsx`, `src/meta.js`, `src/generate.js`, `src/library.js`,
