@@ -1972,8 +1972,20 @@ button.avatar:focus-visible {
   }
 
   /* Seul le corps défile : l'en-tête « Travail en cours » reste posé,
-     sinon on perd le titre du panneau dès la première ligne de journal. */
+     sinon on perd le titre du panneau dès la première ligne de journal.
+
+     `flex: 1` est ce qui fait que « défile » veut dire quelque chose, et il
+     manquait — le pupitre l'avait, l'épreuve non. Sans lui, le corps se
+     dimensionne sur SON CONTENU : `scrollHeight === clientHeight`, donc
+     `overflow-y: auto` ne produit aucune barre, et ce qui dépasse la
+     colonne est simplement coupé par la coquille (`overflow: hidden`).
+     Mesuré le 2026-08-23 sur un audit à trois failles : le bouton
+     « Appliquer l'audit → v2 » était dans le DOM, son bas à 1018 px pour
+     une fenêtre de 913 — présent, cliquable au clavier, et INATTEIGNABLE
+     à la souris. Le juge reprochait des choses qu'on ne pouvait plus
+     corriger. */
   .epreuve-corps {
+    flex: 1;
     overflow-y: auto;
     margin: 0 -6px;
     padding: 2px 6px;
@@ -2038,11 +2050,20 @@ button.avatar:focus-visible {
     min-height: 0;
   }
 
+  /* `min-height: 0` ici est le PENDANT de celui de la coquille, et il
+     manquait. Un élément de grille vaut `min-height: auto` par défaut :
+     il refuse de descendre sous la hauteur de son contenu, et cette
+     valeur-là l'emporte sur le `height: 100%` écrit juste en dessous.
+     Mesuré le 2026-08-23 : rangée de 801 px, panneau de 988 — il
+     débordait de 187 px, hors de la coquille qui coupe, et son corps
+     n'avait donc aucune hauteur à contraindre. `flex: 1` sur le corps ne
+     sert à rien tant que le panneau lui-même n'est pas borné. */
   .pupitre,
   .epreuve {
     position: relative;
     top: auto;
     height: 100%;
+    min-height: 0;
     max-height: none;
   }
 

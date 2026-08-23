@@ -14,7 +14,27 @@ machine) : c'est la dette de ce déploiement.
 Déploiement précédent : 2026-08-02, commit `e87cbf3`, 228 au harnais + 142 au
 pilotage.
 
-## 2026-08-23 — une seconde technique, EN PRODUCTION
+## 2026-08-23, 09h — le panneau du juge ne défilait pas
+
+Signalé par Gabriel une heure après la mise en ligne : le juge liste ses
+failles et **aucun moyen de lancer la v2**. Cause mesurée, correctif posé,
+assertion qui mord — tout est dans `DECISIONS.md` § 28. En deux phrases : la
+colonne de droite débordait sa rangée de 187 px faute d'un `min-height: 0`
+(un élément de grille vaut `min-height: auto`, qui l'emporte sur
+`height: 100%`), donc son corps n'avait aucune hauteur à contraindre et
+`overflow-y: auto` ne produisait aucune barre ; le bouton était dans le DOM,
+son bas à 1018 px pour une fenêtre de 913. **Défaut antérieur au gantelet**
+(vérifié sur `2368eeb`), réveillé par la longueur d'un audit.
+
+Le harnais gagne une quatrième surface, « trois panneaux (1800 px) » : c'est
+la première fois qu'un palier au-dessus de 1100 px est éprouvé
+automatiquement. `--window-size` est honoré par ce Chrome headless — § 18 ne
+valait que pour la sonde de débordement, pas pour Chrome.
+
+**Reste vrai :** ce harnais mesure des hauteurs, il ne clique pas. Playwright
+est toujours à installer.
+
+## 2026-08-23, 08h — une seconde technique, EN PRODUCTION
 
 L'atelier sait produire **deux** familles de prompts : la méthode Boris, et la
 **boucle du gantelet** (technique de Matt Shumer, skill de RoboNuggets, CC BY

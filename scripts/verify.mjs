@@ -1383,6 +1383,128 @@ const SURFACES = [
       assert("la limite affichée est la sienne", /limite 1300 car\./.test(dom));
     },
   },
+  /* QUATRIÈME surface, et la seule à ouvrir une VRAIE grande fenêtre.
+
+     Au-delà de 1400 px l'atelier tient exactement dans l'écran : la
+     coquille ne défile plus, et chaque colonne défile chez elle. Ce
+     palier n'était éprouvé par AUCUN instrument automatique — le harnais
+     force la largeur du document, les media queries s'évaluent sur le
+     vrai viewport (§ 18), et le pilotage demande Playwright. Il a laissé
+     passer un défaut qui est allé en production le 2026-08-23 : la
+     colonne de droite débordait sa rangée de 187 px, donc son corps
+     n'avait aucune hauteur à contraindre, donc `overflow-y: auto` ne
+     produisait aucune barre — et le bouton « Appliquer l'audit → v2 »
+     était dans le DOM, son bas à 1018 px pour une fenêtre de 913,
+     INATTEIGNABLE à la souris. Le juge reprochait des choses qu'on ne
+     pouvait plus corriger.
+
+     `--window-size` est honoré par ce Chrome : la disposition à trois
+     panneaux se rend pour de bon. La sonde de débordement est donc
+     désactivée ici (elle forcerait le document à 320 px et détruirait ce
+     qu'on vient éprouver) et la surface mesure elle-même. */
+  {
+    label: "trois panneaux (1800 px)",
+    marker: "Travail en cours",
+    taille: "1800,1000",
+    sansMesure: true,
+    routes: {
+      "/api/session": {
+        ok: true,
+        authenticated: true,
+        user: { id: "sonde", name: "Sonde", email: "" },
+        users: [],
+      },
+      "/api/prompts": { ok: true, items: [CARTE_SONDE] },
+      "/api/usage": { ok: true, total: 0.4237 },
+    },
+    action: `<script>
+      window.__manuel = true;
+      setTimeout(() => {
+        /* On charge la colonne de droite comme la vie la charge : le
+           cassetin rouvert met le prompt au marbre, et « ⋯ » déplie les
+           six critères du juge. Mesurer une colonne vide prouverait
+           qu'une colonne vide tient dans l'écran. */
+        document.querySelector(".casse-toggle")?.click();
+        setTimeout(() => {
+          document.querySelector(".casse-open")?.click();
+          setTimeout(() => {
+            document.querySelector(".note-plus")?.click();
+            setTimeout(() => {
+              const h = (sel) => {
+                const el = document.querySelector(sel);
+                return el ? Math.round(el.getBoundingClientRect().height) : -1;
+              };
+              const corps = document.querySelector(".epreuve-corps");
+              const pupitre = document.querySelector(".pupitre-corps");
+              const p = document.createElement("pre");
+              p.id = "PROBE-LARGE";
+              p.textContent = [
+                "largeur:" + window.innerWidth,
+                "shell:" + h(".shell"),
+                "epreuve:" + h(".epreuve"),
+                "pupitre:" + h(".pupitre"),
+                "corpsClient:" + (corps ? corps.clientHeight : -1),
+                "corpsScroll:" + (corps ? corps.scrollHeight : -1),
+                "pupitreClient:" + (pupitre ? pupitre.clientHeight : -1),
+                "pupitreScroll:" + (pupitre ? pupitre.scrollHeight : -1),
+                "page:" + Math.round(document.documentElement.scrollHeight),
+              ].join(" ");
+              document.body.appendChild(p);
+            }, 500);
+          }, 500);
+        }, 500);
+      }, 1400);
+    </script>`,
+    check(dom) {
+      const found = /id="PROBE-LARGE">([^<]*)</.exec(dom);
+      if (!found) return assert("trois panneaux — mesure obtenue", false, "sonde muette");
+      const m = Object.fromEntries(
+        found[1].trim().split(" ").map((pair) => {
+          const [k, v] = pair.split(":");
+          return [k, Number(v)];
+        })
+      );
+
+      assert("la disposition à trois panneaux est bien celle rendue", m.largeur >= 1400, `${m.largeur} px`);
+
+      /* L'invariant qui a manqué. Un élément de grille vaut
+         `min-height: auto` : sans `min-height: 0`, il refuse de descendre
+         sous la hauteur de son contenu et cette valeur l'emporte sur le
+         `height: 100%`. Le panneau déborde alors sa rangée, la coquille le
+         coupe, et son corps n'a plus rien à contraindre. */
+      assert(
+        "la colonne de droite ne déborde pas sa rangée",
+        m.epreuve <= m.shell + 1,
+        `épreuve ${m.epreuve} px pour une rangée de ${m.shell}`
+      );
+      assert(
+        "celle de gauche non plus",
+        m.pupitre <= m.shell + 1,
+        `pupitre ${m.pupitre} px pour une rangée de ${m.shell}`
+      );
+
+      /* Et « défile chez elle » doit vouloir dire quelque chose : le corps
+         est BORNÉ. Un corps qui vaut exactement son contenu n'a jamais de
+         barre, quoi qu'en dise `overflow-y: auto`. */
+      assert(
+        "et son corps est borné — donc il défile vraiment",
+        m.corpsClient > 0 && m.corpsClient < m.shell,
+        `corps ${m.corpsClient} px, rangée ${m.shell}`
+      );
+      assert(
+        "tout ce que le corps contient reste atteignable",
+        m.corpsScroll >= m.corpsClient,
+        `${m.corpsScroll} à parcourir dans ${m.corpsClient}`
+      );
+
+      /* Et la promesse du palier : la page elle-même ne défile pas. */
+      assert(
+        "la page tient dans l'écran, sans défilement",
+        m.page <= 1000 + 1,
+        `${m.page} px pour 1000`
+      );
+    },
+  },
 ];
 
 if (!existsSync(CHROME) || !bundle) {
@@ -1396,18 +1518,20 @@ if (!existsSync(CHROME) || !bundle) {
       measured.dom.includes(surface.marker),
       `« ${surface.marker} » attendu dans le DOM`
     );
-    for (const [width, over, qui] of measured.widths) {
+    if (!surface.sansMesure) {
+      for (const [width, over, qui] of measured.widths) {
+        assert(
+          `${surface.label} — aucun débordement à ${width} px`,
+          over === 0,
+          over === 0 ? "0 élément(s) trop large(s)" : `${over} trop large(s), à commencer par ${qui}`
+        );
+      }
       assert(
-        `${surface.label} — aucun débordement à ${width} px`,
-        over === 0,
-        over === 0 ? "0 élément(s) trop large(s)" : `${over} trop large(s), à commencer par ${qui}`
+        `${surface.label} — aucun élément fixe plus large que la fenêtre`,
+        measured.fixes === 0,
+        `${measured.fixes} élément(s)`
       );
     }
-    assert(
-      `${surface.label} — aucun élément fixe plus large que la fenêtre`,
-      measured.fixes === 0,
-      `${measured.fixes} élément(s)`
-    );
     surface.check?.(measured.dom);
   }
 }
@@ -1627,7 +1751,7 @@ function call(path, method, payload) {
 
 /* Sert une copie de dist/ instrumentée, avec des réponses d'API en dur, et
    rend ce que Chrome a mesuré. Une surface = un serveur, un Chrome. */
-async function measureOverflow({ label, routes, action }) {
+async function measureOverflow({ label, routes, action, taille, sansMesure }) {
   const probe = join(tmpdir(), `bpg-probe-${process.pid}-${label}`);
   rmSync(probe, { recursive: true, force: true });
   cpSync("dist", probe, { recursive: true });
@@ -1668,6 +1792,13 @@ async function measureOverflow({ label, routes, action }) {
         [
           "--headless=new",
           "--disable-gpu",
+          /* `--window-size` EST honoré par ce Chrome, contrairement à ce que
+             disait DECISIONS § 18 — vérifié le 2026-08-23, une fenêtre de
+             1800 px rend bien la disposition à trois panneaux. C'est ce qui
+             permet enfin d'éprouver un palier au-dessus de 1100 px sans
+             Playwright. La sonde de débordement, elle, continue de forcer la
+             largeur du document : elle mesure autre chose. */
+          ...(taille ? [`--window-size=${taille}`] : []),
           "--virtual-time-budget=8000",
           "--dump-dom",
           `http://localhost:${port}/`,
@@ -1688,6 +1819,11 @@ async function measureOverflow({ label, routes, action }) {
   rmSync(probe, { recursive: true, force: true });
 
   if (!dom) return null;
+
+  /* Une surface qui mesure elle-même n'a pas de sonde de débordement : la
+     forcer à 320 px détruirait précisément la disposition qu'elle vient
+     éprouver. */
+  if (sansMesure) return { dom, widths: [], fixes: 0 };
 
   const found = /id="PROBE">([^<]*)</.exec(dom);
   if (!found) {

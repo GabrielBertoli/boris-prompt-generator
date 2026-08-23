@@ -631,6 +631,58 @@ la variante portable ; elle est documentée dans l'aide, pas produite.
 
 ---
 
+## 28. Le juge reprochait ce qu'on ne pouvait plus corriger
+
+Signalé par Gabriel le 2026-08-23, écran large : le juge liste trois failles, et
+**aucun moyen de lancer la v2**. Le bouton « Appliquer l'audit → v2 » était
+pourtant dans le DOM.
+
+**Ce n'était pas un bouton manquant, c'était un panneau qui ne défilait pas.**
+Mesuré à 1800 × 1000 : rangée de 801 px, colonne de droite de **988** — elle
+débordait sa rangée de 187 px, hors de la coquille qui coupe. Son corps valait
+donc exactement son contenu (`scrollHeight === clientHeight === 897`),
+`overflow-y: auto` ne produisait aucune barre, et le bouton avait son bas à
+**1018 px pour une fenêtre de 913** : présent, atteignable au clavier,
+inatteignable à la souris.
+
+**La cause, en une ligne de CSS absente.** Un élément de grille vaut
+`min-height: auto` par défaut : il refuse de descendre sous la hauteur de son
+contenu, et cette valeur l'emporte sur le `height: 100%` écrit juste en dessous.
+`.pupitre` et `.epreuve` n'avaient pas leur `min-height: 0` — le pendant exact
+de celui que § 26 avait posé sur la coquille, et pour la même raison. Le corps
+de l'épreuve manquait en plus son `flex: 1`, que le pupitre avait : sans lui,
+« défile chez elle » ne veut rien dire, le corps se dimensionnant sur son
+contenu. Les deux sont corrigées ; les deux sont ANTÉRIEURES à la boucle du
+gantelet (vérifié sur le commit `2368eeb`). Ce n'est pas une régression du
+2026-08-23, c'est un défaut latent que la longueur d'un audit a réveillé.
+
+**Pourquoi rien ne l'avait dit.** Le palier au-delà de 1400 px n'était éprouvé
+par AUCUN instrument automatique : le harnais force la largeur du document et
+les media queries s'évaluent sur le vrai viewport (§ 18), le pilotage demande
+Playwright, absent de la machine. C'est très exactement la dette écrite dans
+`ETAT.md` au déploiement du matin, et elle s'est présentée le jour même.
+
+**§ 18 est à moitié faux, et c'est la vraie trouvaille.** `--window-size` EST
+honoré par ce Chrome headless — vérifié : une fenêtre de 1800 px rend bel et
+bien la disposition à trois panneaux. Ce qui est vrai de la SONDE de
+débordement (elle force `documentElement.style.width`, donc n'exerce aucun
+palier) ne l'est pas de Chrome. Le harnais peut donc ouvrir une vraie grande
+fenêtre, et il le fait maintenant.
+
+**Quatrième surface : « trois panneaux (1800 px) ».** Sonde de débordement
+désactivée — la forcer à 320 px détruirait la disposition qu'on vient éprouver
+— et la surface mesure elle-même, sur une colonne chargée comme la vie la
+charge (cassetin rouvert, six critères dépliés). Cinq assertions, dont les deux
+qui portent : la colonne ne déborde pas sa rangée, et son corps est BORNÉ.
+Vérifié qu'elles mordent : le correctif retiré, elles passent au rouge en
+nommant les chiffres (« épreuve 892 px pour une rangée de 801 »).
+
+**Ce qui reste vrai malgré tout :** ce harnais mesure des hauteurs, il ne
+clique pas. Le pilotage Playwright reste le seul à prouver un parcours au clic,
+et il reste à installer.
+
+---
+
 ## Reste à la main de Gabriel
 
 - Vérifier un domaine d'envoi chez Resend, pour que le lien de
