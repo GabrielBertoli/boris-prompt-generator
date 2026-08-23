@@ -249,6 +249,164 @@ section("Plafond de longueur");
   );
 }
 
+/* ---------- 1 bis 2 ter. les deux techniques ----------
+
+   L'atelier produit maintenant deux objets différents. Ce qui se vérifie
+   ici n'est pas « le gantelet marche » mais la seule chose qui puisse
+   casser en silence : qu'une règle de l'une soit appliquée au prompt de
+   l'autre. Un vérificateur qui cherche huit sections dans un prompt de
+   170 mots dit « à refaire » sans que rien soit à refaire — et personne
+   ne va relire le code pour un verdict qui a l'air d'un avis. */
+
+section("Les deux techniques");
+
+{
+  const { DEFAULT_TECHNIQUE, TECHNIQUES, estTechnique, techniqueOf } = await import("../src/techniques.js");
+  const gaunt = await import("../src/gauntlet.js");
+
+  assert("il y a deux techniques", TECHNIQUES.length === 2, TECHNIQUES.map((t) => t.id).join(", "));
+  assert("Boris reste celle par défaut", DEFAULT_TECHNIQUE === "boris", DEFAULT_TECHNIQUE);
+  assert("un identifiant inconnu retombe sur Boris", techniqueOf("inventée").id === "boris");
+  assert("un identifiant absent aussi", techniqueOf(undefined).id === "boris");
+  assert("estTechnique refuse ce qui n'en est pas une", !estTechnique("inventée") && estTechnique("gauntlet"));
+
+  /* LE contrat. Un champ manquant ne se voit pas au chargement : il se
+     voit à la génération, une fois l'appel payé. */
+  const CONTRAT = [
+    "id", "nom", "resume", "quand", "cleReglage", "hardLimit", "limiteMin", "limiteDefaut",
+    "capLimit", "fenetre", "buildMeta", "etape1", "etape2Instruction", "verifyPrompt",
+    "CRITERES", "auditInstruction", "auditApplyInstruction", "correctionInstruction", "baseConvoFor",
+    "exempleIdee", "exempleContraintes", "exempleCorrection", "bandeau", "accroche",
+  ];
+  for (const t of TECHNIQUES) {
+    const manque = CONTRAT.filter((k) => t[k] === undefined || t[k] === null || t[k] === "");
+    assert(`« ${t.nom} » remplit le contrat`, manque.length === 0, manque.join(", "));
+    assert(`« ${t.nom} » a six critères de juge`, t.CRITERES.length === 6, `${t.CRITERES.length}`);
+    assert(
+      `« ${t.nom} » a des clés de critères uniques`,
+      new Set(t.CRITERES.map((c) => c.cle)).size === 6
+    );
+  }
+
+  /* Les deux ne règlent PAS la même case : un curseur partagé aurait fait
+     suivre à l'une le réglage choisi pour l'autre, sans rien à l'écran. */
+  assert(
+    "chacune a sa propre case de réglage",
+    new Set(TECHNIQUES.map((t) => t.cleReglage)).size === 2,
+    TECHNIQUES.map((t) => t.cleReglage).join(", ")
+  );
+  assert(
+    "et les grilles du juge n'ont aucune clé commune",
+    !techniqueOf("boris").CRITERES.some((c) =>
+      techniqueOf("gauntlet").CRITERES.some((g) => g.cle === c.cle)
+    )
+  );
+
+  /* ---- l'oracle du gantelet ---- */
+
+  const G = techniqueOf("gauntlet");
+  const bon = gaunt.PROMPT_REFERENCE;
+  const vu = G.verifyPrompt(bon, G.limiteDefaut);
+  assert("l'exemple de référence passe son propre vérificateur", vu.pass, vu.fails.join(" ; "));
+  assert("et il est dans la fenêtre visée", vu.mots >= 140 && vu.mots <= 190, `${vu.mots} mots`);
+
+  /* Chaque faute mortelle nommée par la technique est une assertion, pas
+     un conseil. On les provoque une par une sur un texte par ailleurs
+     valide : c'est le seul moyen de savoir laquelle est vraiment tenue. */
+  const casse = [
+    ["la barre disparue", bon.replace(/barre/gi, "cible"), "barre"],
+    ["la comparaison à l'aveugle retirée", bon.replace(/à l'aveugle/g, ""), "aveugle"],
+    ["le contexte neuf retiré", bon.replace(/au contexte neuf/g, ""), "contexte neuf"],
+    ["« /loop » retiré", bon.replace("/loop", "boucle"), "/loop"],
+    ["« ultracode » retiré", bon.replace("et ultracode", ""), "ultracode"],
+    ["un nombre de tours fixé", bon + "\nArrête après trois tours.", "tours"],
+    ["une puce ajoutée", bon + "\n- un point de plus", "puces"],
+  ];
+  for (const [nom, texte, attendu] of casse) {
+    const v = G.verifyPrompt(texte, G.limiteDefaut);
+    assert(`refusé : ${nom}`, !v.pass, "accepté à tort");
+    assert(
+      `et la raison le nomme (${attendu})`,
+      v.fails.some((f) => f.toLowerCase().includes(attendu.toLowerCase())),
+      v.fails.join(" ; ")
+    );
+  }
+
+  const court = G.verifyPrompt("La barre, c'est Nike. À l'aveugle, contexte neuf, critique. /loop ultracode.", G.limiteDefaut);
+  assert("un prompt trop court est refusé", !court.pass);
+  assert("et la longueur est nommée", court.fails.some((f) => f.startsWith("longueur")), court.fails.join(" ; "));
+
+  const long = G.verifyPrompt(bon + " " + "mot ".repeat(400), G.limiteDefaut);
+  assert("un prompt qui déborde le plafond est marqué hors limite", long.over === true);
+
+  /* Le vérificateur de Boris appliqué à un prompt de gantelet doit
+     échouer — et c'est exactement pourquoi il ne doit jamais lui être
+     appliqué. L'assertion existe pour que la confusion soit visible ici
+     plutôt qu'à l'écran d'un utilisateur. */
+  const B = techniqueOf("boris");
+  assert(
+    "l'oracle de Boris rejetterait un prompt de gantelet",
+    !B.verifyPrompt(bon, 3900).pass,
+    "les deux oracles seraient interchangeables — ils ne le sont pas"
+  );
+  assert(
+    "et celui du gantelet rejetterait un prompt de Boris",
+    !G.verifyPrompt("# QUI TU ES\nx\n# SORTIE\nSinon tu continues.", G.limiteDefaut).pass
+  );
+
+  /* L'apostrophe typographique : mesurée comme le piège le plus bête et
+     le plus certain — le modèle écrit « l’aveugle », l'assertion cherche
+     « l'aveugle », et un prompt juste est déclaré faux. */
+  const typo = bon.replace(/'/g, "’");
+  assert("une apostrophe typographique ne fait pas échouer", G.verifyPrompt(typo, G.limiteDefaut).pass);
+
+  /* Le choix de la meilleure tentative. Celui de Boris rend la plus
+     COURTE ; ici la plus courte peut être la plus mutilée. */
+  const tries = [
+    { text: "a", check: { pass: false, fails: ["longueur : 60 mots — trop court (vise 140 à 190)"], mots: 60 } },
+    { text: "b", check: { pass: false, fails: ["longueur : 240 mots — trop long (vise 140 à 190)"], mots: 240 } },
+    { text: "c", check: { pass: false, fails: ["longueur : 200 mots — trop long (vise 140 à 190)"], mots: 200 } },
+  ];
+  assert(
+    "la meilleure tentative est la plus proche de la fenêtre, pas la plus courte",
+    G.choisirMeilleure(tries).text === "c",
+    G.choisirMeilleure(tries).text
+  );
+  const avecVert = [...tries, { text: "vert", check: { pass: true, fails: [], mots: 170 } }];
+  assert("une tentative au vert gagne toujours", G.choisirMeilleure(avecVert).text === "vert");
+
+  /* La grille du juge se reconstruit avec les clés de SA technique. Sans
+     le troisième argument, six lignes vides sous une note juste. */
+  const { normalizeNote } = await import("../src/meta.js");
+  const noteG = normalizeNote(
+    { note: 8, criteres: G.CRITERES.map((c) => ({ cle: c.cle, note: 8, mot: "ok" })) },
+    "claude-opus-5",
+    G.CRITERES
+  );
+  assert("les six critères du gantelet sont reconstruits", noteG.criteres.every((c) => c.note === 8));
+  const noteMelangee = normalizeNote(
+    { note: 8, criteres: G.CRITERES.map((c) => ({ cle: c.cle, note: 8, mot: "ok" })) },
+    "claude-opus-5"
+  );
+  assert(
+    "sans sa grille, la note du gantelet perdrait ses critères",
+    noteMelangee.criteres.every((c) => c.note === null),
+    "le troisième argument de normalizeNote n'est plus load-bearing"
+  );
+
+  /* La technique suit l'entrée de bibliothèque, sinon rouvrir un prompt
+     de gantelet le ferait mesurer contre huit sections absentes. */
+  const lib = await import("../src/library.js");
+  const eG = lib.makeEntry({ idea: "une page", prompt: bon, limit: 1300, version: 1, technique: "gauntlet" });
+  assert("une entrée garde sa technique", eG.technique === "gauntlet", eG.technique);
+  const eVieille = lib.makeEntry({ idea: "x", prompt: "y", limit: 3900, version: 1 });
+  assert("une entrée sans technique est de Boris", eVieille.technique === "boris", eVieille.technique);
+  const imported = lib.parseBundle(JSON.stringify([{ ...eG }])).items[0];
+  assert("et elle survit à l'export/import", imported.technique === "gauntlet", imported.technique);
+  const bidon = lib.parseBundle(JSON.stringify([{ ...eG, technique: "inventée" }])).items[0];
+  assert("une technique inventée dans un import retombe sur Boris", bidon.technique === "boris");
+}
+
 /* ---------- 1 bis 3. la note du juge ----------
    Le juge répond en JSON libre. Tout ce qui suit porte sur ce qu'on en
    RECONSTRUIT : une note de 47 — déjà vue quand un modèle note sur 100 —
@@ -376,12 +534,20 @@ section("La note du juge");
 section("L'aide");
 
 {
-  const { CHAPITRES, PIED, SECTIONS_BORIS } = await import("../src/aide.js");
+  const { CHAPITRES, MOUVEMENTS_GANTELET, PIED, SECTIONS_BORIS } = await import("../src/aide.js");
   const { buildMeta, HARD_LIMIT } = await import("../src/meta.js");
 
-  assert("l'aide a douze chapitres", CHAPITRES.length === 12, `${CHAPITRES.length}`);
-  assert("chacun porte un numéro unique", new Set(CHAPITRES.map((c) => c.num)).size === 12);
-  assert("chacun porte une clé unique", new Set(CHAPITRES.map((c) => c.cle)).size === 12);
+  const NB_CHAPITRES = 14;
+  assert("l'aide a quatorze chapitres", CHAPITRES.length === NB_CHAPITRES, `${CHAPITRES.length}`);
+  assert("chacun porte un numéro unique", new Set(CHAPITRES.map((c) => c.num)).size === NB_CHAPITRES);
+  assert("chacun porte une clé unique", new Set(CHAPITRES.map((c) => c.cle)).size === NB_CHAPITRES);
+  /* Le numéro se déduit du rang : c'est ce qui permet d'insérer un
+     chapitre sans renuméroter, et c'est donc ça qu'il faut tenir. */
+  assert(
+    "les numéros suivent le rang, sans trou",
+    CHAPITRES.every((c, i) => c.num === String(i + 1).padStart(2, "0")),
+    CHAPITRES.map((c) => c.num).join(" ")
+  );
   assert(
     "chacun dit à quoi sa partie SERT",
     CHAPITRES.every((c) => c.sert && c.sert.trim().length > 20),
@@ -395,7 +561,7 @@ section("L'aide");
 
   /* Toutes les parties de l'écran sont couvertes. Sans cette liste, on
      ajoute un panneau et l'aide vieillit en silence. */
-  for (const cle of ["porte", "idee", "questions", "marbre", "epreuve", "note", "fil", "casse", "reglages", "cout", "methode", "securite"]) {
+  for (const cle of ["porte", "idee", "techniques", "questions", "marbre", "epreuve", "note", "fil", "casse", "reglages", "cout", "methode", "gantelet", "securite"]) {
     assert(`le chapitre « ${cle} » est là`, CHAPITRES.some((c) => c.cle === cle));
   }
 
@@ -414,6 +580,36 @@ section("L'aide");
     "chaque section est traduite en français courant",
     SECTIONS_BORIS.every(([, quoi]) => quoi && quoi.length > 40)
   );
+
+  /* Le chapitre du gantelet annonce sept mouvements, et les quatre qui
+     sont des phrases LITTÉRALES du prompt doivent se retrouver dans
+     l'exemple de référence — même contrôle que les huit sections de
+     Boris contre son méta-prompt, et pour la même raison : une aide qui
+     promet une forme que l'atelier ne produit plus se lit comme vraie. */
+  {
+    const gaunt = await import("../src/gauntlet.js");
+    assert("l'aide annonce sept mouvements", MOUVEMENTS_GANTELET.length === 7, `${MOUVEMENTS_GANTELET.length}`);
+    assert(
+      "chaque mouvement est traduit en français courant",
+      MOUVEMENTS_GANTELET.every(([, quoi]) => quoi && quoi.length > 40)
+    );
+    const litterales = ["La barre, c'est", "Le critique est dur.", "/loop", "Déploie des sous-agents et ultracode."];
+    for (const phrase of litterales) {
+      assert(
+        `« ${phrase} » est bien dans le prompt produit`,
+        gaunt.PROMPT_REFERENCE.includes(phrase)
+      );
+      assert(
+        `et annoncée par l'aide`,
+        MOUVEMENTS_GANTELET.some(([titre]) => titre.includes(phrase.replace(/\.$/, "")) || phrase.includes(titre.replace(/…$/, "").trim()))
+      );
+    }
+    /* La licence CC BY impose l'attribution : elle est due, elle se
+       vérifie. Dans le code ET dans l'écran que l'utilisateur lit. */
+    const attribution = CHAPITRES.find((c) => c.cle === "techniques").points.join(" ");
+    assert("l'aide attribue la technique à son auteur", /Matt Shumer/.test(attribution));
+    assert("et nomme la licence", /CC BY/.test(attribution));
+  }
 
   /* Le chapitre « méthode » cite le plafond réel : un chiffre écrit à la
      main aurait vieilli au premier changement de HARD_LIMIT. */
@@ -1179,14 +1375,15 @@ if (!ANTHROPIC) {
   console.log("… ignoré : ANTHROPIC_TEST_KEY non fourni.");
 } else {
   const limit = 3900;
-  const { buildMeta, targetWindow } = await import("../src/meta.js");
-  const { runVerifiedGeneration } = await import("../src/generate.js");
+  const { techniqueOf } = await import("../src/techniques.js");
+  const B = techniqueOf("boris");
+  const { MAX_ATTEMPTS: MAX_TENTATIVES, runVerifiedGeneration } = await import("../src/generate.js");
 
   const base = [
     {
       role: "user",
       content:
-        buildMeta(limit) +
+        B.buildMeta(limit) +
         "\n\nIDÉE :\nune conciergerie de copropriétés pilotée par des agents",
     },
   ];
@@ -1232,10 +1429,10 @@ if (!ANTHROPIC) {
       }
     },
     baseConvo: base,
-    instruction:
-      "ÉTAPE 2 — Génère MAINTENANT le system prompt final. Texte brut uniquement : pas de backticks, " +
-      "pas de commentaire, pas de préambule. Huit sections '# EN MAJUSCULES', " +
-      `moins de ${limit} caractères, vise ${targetWindow(limit).lo} à ${targetWindow(limit).hi}.`,
+    /* L'instruction vient de la TECHNIQUE, elle n'est plus recopiée ici :
+       une copie d'instruction vieillit toute seule, et le vérificateur
+       aurait alors éprouvé une méthode que l'atelier n'applique plus. */
+    instruction: B.etape2Instruction({ limit }),
     limit,
     onLog: (line) => console.log(`   · ${line}`),
   }).catch((error) => {
@@ -1282,6 +1479,64 @@ if (!ANTHROPIC) {
       `${run.check.count} caractères en ${run.attempts} tentative(s)`
     );
     assert("finit par « Sinon tu continues. »", run.text.trim().endsWith("Sinon tu continues."));
+  }
+
+  /* ---- la même boucle, pour la seconde technique ----
+     Ce qui est éprouvé ici n'est pas la qualité du prompt mais le fait
+     qu'un modèle réel, avec CE méta-prompt, sorte quelque chose que CET
+     oracle accepte. C'est la seule façon de savoir si les assertions du
+     gantelet sont tenables — un vérificateur trop strict ne se voit pas
+     sur un texte écrit à la main pour lui plaire. */
+  const G = techniqueOf("gauntlet");
+  const limitG = G.limiteDefaut;
+  const baseG = G.baseConvoFor({
+    idea: "une page de tarifs pour un logiciel de facturation destiné aux indépendants",
+    limit: limitG,
+  });
+
+  const runG = await runVerifiedGeneration({
+    ask: async (convo) => {
+      const { text } = await callClaude(convo, {
+        apiKey: ANTHROPIC,
+        model: "claude-sonnet-5",
+        maxTokens: 1400,
+      });
+      return text;
+    },
+    baseConvo: baseG,
+    instruction: G.etape2Instruction({
+      limit: limitG,
+      barre: "la page de tarifs de Stripe (stripe.com/pricing)",
+      mesure: "",
+    }),
+    limit: limitG,
+    verify: G.verifyPrompt,
+    repair: G.repairInstruction,
+    choisir: G.choisirMeilleure,
+    onLog: (line) => console.log(`   · [gantelet] ${line}`),
+  }).catch((error) => {
+    assert("le gantelet obtient une réponse", false, error.message);
+    return null;
+  });
+
+  if (runG) {
+    assert(
+      `le prompt du gantelet passe son oracle en ${MAX_TENTATIVES} tentatives au plus`,
+      runG.check.pass,
+      `${runG.check.mots} mots — ${runG.check.fails.join(" ; ") || "au vert"}`
+    );
+    assert(
+      "il tient dans la fenêtre de mots",
+      runG.check.mots >= 110 && runG.check.mots <= 210,
+      `${runG.check.mots} mots`
+    );
+    assert("il nomme la barre demandée", /stripe/i.test(runG.text), runG.text.slice(0, 120));
+    assert(
+      "il finit par la ligne des sous-agents",
+      /ultracode/i.test(runG.text.trim().split("\n").filter(Boolean).pop()),
+      runG.text.trim().split("\n").filter(Boolean).pop()
+    );
+    assert("il ne contient ni titre ni puce", !/^[ \t]*(#{1,6}\s|[-*•]\s)/m.test(runG.text));
   }
 }
 

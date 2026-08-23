@@ -10,6 +10,34 @@ JavaScript servi est **byte-identique** au build local (SHA-256
 `feaaa8c8…`) — seul le nom de fichier diffère, la construction distante
 hache un graphe légèrement différent.
 
+## 2026-08-23 — une seconde technique, en local, PAS en ligne
+
+L'atelier sait produire **deux** familles de prompts : la méthode Boris, et la
+**boucle du gantelet** (technique de Matt Shumer, skill de RoboNuggets, CC BY
+4.0 — voir DECISIONS § 27). Le choix se fait sur deux tuiles au-dessus de
+l'idée ; tout le reste de l'écran suit la technique armée.
+
+**Ce qui est vrai à cette heure :**
+
+- `npm run build` au vert, `npm run verify` **271 assertions au vert** (dont
+  **43 nouvelles** pour les techniques, et un aller-retour réel contre
+  `api.anthropic.com` qui a rendu un prompt de gantelet de 188 mots accepté du
+  premier coup).
+- Parcours complet éprouvé dans un Chrome réel, appel Anthropic simulé en flux :
+  choix de la technique → 3 barres proposées → barre choisie → prompt au marbre
+  (1 105 car., 183 mots) → note du juge 8,2 avec **sa** grille → audit → v2.
+- **Rien n'est déployé.** La production sert toujours la version du 2026-08-02.
+  `npm run pilotage` n'a PAS été rejoué (Playwright absent de la machine) : les
+  paliers responsive des deux tuiles et du panneau des barres ne sont donc
+  éprouvés qu'à 1 200 px, pas à 320.
+
+**Reprise :** installer Playwright, `npm run pilotage`, corriger ce qui déborde,
+puis déposer une preview et la faire valider avant toute mise en production.
+
+Fichiers touchés : `src/gauntlet.js` (neuf), `src/techniques.js` (neuf),
+`src/App.jsx`, `src/meta.js`, `src/generate.js`, `src/library.js`,
+`src/aide.js`, `src/atelier.css`, `scripts/verify.mjs`.
+
 ## Reprendre — dans cet ordre
 
 ```bash

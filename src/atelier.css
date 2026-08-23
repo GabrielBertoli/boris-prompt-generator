@@ -174,6 +174,134 @@ body {
   border-radius: var(--r-md);
 }
 
+/* ================================================================
+   LE CHOIX DE LA TECHNIQUE — deux tuiles, au-dessus de l'idée.
+
+   Deux tuiles et non un menu déroulant : ce ne sont pas deux réglages
+   d'une même chose, ce sont deux produits, et il faut pouvoir LIRE ce
+   qu'on choisit avant de choisir. Un menu aurait montré deux mots.
+   ================================================================ */
+
+.techniques {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+@media (min-width: 700px) {
+  .techniques {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.technique {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.technique:hover:not(:disabled) {
+  border-color: var(--muted-2);
+}
+
+/* Verrouillé sous un prompt existant : la tuile choisie reste LISIBLE —
+   elle dit avec quelle méthode le prompt à l'écran a été écrit — et
+   seule l'autre s'efface. Les deux également grisées auraient effacé
+   l'information au moment où elle sert le plus. */
+.technique:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.technique-active {
+  border-color: var(--ember);
+  background: linear-gradient(180deg, rgba(255, 122, 61, 0.07), transparent 60%), var(--surface-2);
+}
+
+.technique-active:disabled {
+  opacity: 0.9;
+}
+
+.technique-nom {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.technique-active .technique-nom {
+  color: var(--ember);
+}
+
+.technique-resume {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.technique-sortie {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--muted-2);
+}
+
+/* ---------- les barres candidates (gantelet) ---------- */
+
+.barre {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  text-align: left;
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.barre:hover {
+  border-color: var(--muted-2);
+}
+
+.barre-active {
+  border-color: var(--ember);
+  background: linear-gradient(180deg, rgba(255, 122, 61, 0.07), transparent 60%), var(--surface-2);
+}
+
+.barre-lettre {
+  flex: none;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--ember);
+  border: 1px solid rgba(255, 122, 61, 0.35);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+
+.barre-corps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.barre-titre {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.barre-pourquoi {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 .rule {
   height: 1px;
   background: linear-gradient(90deg, var(--line), transparent);

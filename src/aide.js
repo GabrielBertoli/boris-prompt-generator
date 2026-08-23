@@ -29,10 +29,24 @@ export const SECTIONS_BORIS = [
   ["# SORTIE", "Quand il a fini. Verrouillé des deux côtés : impossible de tricher en ne demandant jamais rien, impossible de tricher en demandant tout. Se termine toujours par « Sinon tu continues. »"],
 ];
 
-export const CHAPITRES = [
+/* Les sept mouvements du prompt produit par la boucle du gantelet.
+   Même rôle que `SECTIONS_BORIS` pour l'autre technique, et même
+   contrôle : les quatre qui sont des phrases LITTÉRALES du prompt sont
+   comparées à l'exemple de référence, pour qu'aucune ne puisse être
+   annoncée ici après avoir disparu de la méthode. */
+export const MOUVEMENTS_GANTELET = [
+  ["Ce qu'on construit", "Le but, en une ou deux phrases, avec ce qui compte pour toi. Ni découpage, ni technologie, ni plan : l'agent décide mieux que tu ne peux le décider avant qu'il ait commencé."],
+  ["La barre, c'est…", "La référence réelle qu'il doit battre, nommée et allable-chercher, avec l'ordre de se comparer à la vraie chose et jamais à une description d'elle."],
+  ["Constructeur et critique", "Le travail est coupé en petits morceaux jugeables séparément. Sur chacun, celui qui construit et celui qui juge sont DEUX agents, et le juge démarre de zéro : il ne sait pas combien l'autre a peiné."],
+  ["Le critique est dur.", "Le compliment ne sert à rien. Le juge met les deux côte à côte, étiquettes retirées, dit lequel est le meilleur et nomme le seul plus gros manque. Un choix, jamais une note sur 10 — une note remonte toute seule à chaque tour."],
+  ["/loop … à l'aveugle", "La boucle recommence tant que le tien ne gagne pas. C'est la seule sortie possible, avec le moment où tu arrêtes toi-même : jamais « au bout de trois fois »."],
+  ["Une page d'avancement", "Une page qui se met à jour pendant que ça travaille, pour que tu puisses regarder sans interrompre."],
+  ["Déploie des sous-agents et ultracode.", "La dernière ligne, toujours. Elle demande à l'agent de lancer ses constructeurs et ses juges en parallèle plutôt qu'un par un."],
+];
+
+const RAW_CHAPITRES = [
   {
     cle: "porte",
-    num: "01",
     titre: "La porte",
     sert: "Entrer, et rester le seul à pouvoir entrer sous ton nom.",
     points: [
@@ -44,7 +58,6 @@ export const CHAPITRES = [
   },
   {
     cle: "idee",
-    num: "02",
     titre: "Ce que tu confies",
     sert: "Le point de départ : décrire, en français, le travail que tu veux confier.",
     points: [
@@ -55,19 +68,31 @@ export const CHAPITRES = [
     ],
   },
   {
-    cle: "questions",
-    num: "03",
-    titre: "Les questions",
-    sert: "Trois questions au maximum, et seulement si la réponse change vraiment le résultat.",
+    cle: "techniques",
+    titre: "Les deux techniques",
+    sert: "Choisir, avant d'écrire, laquelle des deux méthodes correspond à ce que tu confies.",
     points: [
-      "L'atelier ne pose une question que si elle change matériellement ce qu'il va écrire. Souvent il n'en pose aucune : c'est bon signe, ton idée se suffisait.",
-      "Tu peux laisser une réponse vide. L'atelier tranchera par l'hypothèse la plus raisonnable et l'écrira noir sur blanc dans le résultat — tu sauras donc ce qu'il a supposé.",
+      "La méthode Boris écrit un mandat long — huit sections — pour un agent qui fait tourner quelque chose et découvre son travail là où ça casse. C'est ce qu'il te faut pour une application, un service, un algorithme : un périmètre à couvrir.",
+      "La boucle du gantelet écrit un mandat court — environ 170 mots — pour un agent qui vise une chose qui existe déjà et recommence jusqu'à faire mieux qu'elle. C'est ce qu'il te faut quand tu vises une qualité et non un périmètre : une page, un texte, un outil, une analyse.",
+      "La différence tient à un mot : où est la preuve. Chez Boris elle est DANS le mandat — des contrôles que l'agent se donne. Au gantelet elle est DEHORS — une chose réelle, déjà bonne, que l'agent doit aller chercher et battre.",
+      "Le choix se fait au-dessus de ton idée, avant de lancer. Il se verrouille dès qu'un prompt est à l'écran : changer de technique sous un prompt déjà écrit reviendrait à le juger avec les règles de l'autre. « Nouveau prompt » rouvre le choix.",
+      "La boucle du gantelet est une technique de Matt Shumer, empaquetée en skill par RoboNuggets et reprise ici en français, sous licence CC BY 4.0. Elle n'est pas de nous, et elle est citée partout où elle est utilisée.",
+    ],
+  },
+  {
+    cle: "questions",
+    titre: "Ce qu'on te demande avant d'écrire",
+    sert: "Une seule étape, deux formes : des questions (Boris) ou le choix d'une barre (gantelet).",
+    points: [
+      "Avec la méthode Boris : trois questions au maximum, et seulement si la réponse change matériellement ce qui va être écrit. Souvent il n'y en a aucune — c'est bon signe, ton idée se suffisait. Une réponse laissée vide sera tranchée par l'hypothèse la plus raisonnable, écrite noir sur blanc dans le résultat.",
+      "Avec la boucle du gantelet : deux ou trois références te sont proposées, tu en choisis une, ou tu écris la tienne. Si ton idée en nommait déjà une, rien ne t'est demandé.",
+      "Une bonne référence tient à trois choses : elle est PRÉCISE (« la page tarifs de Stripe », pas « les beaux sites »), on peut vraiment aller la chercher (la capturer, la lire, l'exécuter), et on peut poser les deux côte à côte pour en désigner une.",
+      "Prends la plus dure que l'agent puisse réellement atteindre. Une référence trop facile fait gagner au premier tour et la boucle s'arrête sans avoir servi ; une référence floue fait tout approuver, parce que le juge finit par l'inventer.",
       "Il n'y a pas de mauvaise réponse courte. Trois mots valent mieux qu'un paragraphe : ce sont des points de décision, pas un questionnaire.",
     ],
   },
   {
     cle: "marbre",
-    num: "04",
     titre: "Le prompt — au centre",
     sert: "La pièce elle-même : le texte que tu vas donner à ton agent, et les gestes qu'on fait dessus.",
     points: [
@@ -81,7 +106,6 @@ export const CHAPITRES = [
   },
   {
     cle: "epreuve",
-    num: "05",
     titre: "Le travail en cours — à droite",
     sert: "Tout ce qui se surveille pendant que ça tourne, pour ne jamais quitter le prompt des yeux.",
     points: [
@@ -95,7 +119,6 @@ export const CHAPITRES = [
   },
   {
     cle: "note",
-    num: "06",
     titre: "La note du juge",
     sert: "Une note sur 10 qui dit ce que vaut le prompt — pas ce qu'il pèse.",
     points: [
@@ -109,7 +132,6 @@ export const CHAPITRES = [
   },
   {
     cle: "fil",
-    num: "07",
     titre: "Le fil de correction — à gauche",
     sert: "Là où tu demandes des changements, et où l'histoire de chaque version est gardée.",
     points: [
@@ -122,7 +144,6 @@ export const CHAPITRES = [
   },
   {
     cle: "casse",
-    num: "08",
     titre: "La casse — ta bibliothèque",
     sert: "Tous tes prompts rangés, et ce qu'on peut en faire.",
     points: [
@@ -135,7 +156,6 @@ export const CHAPITRES = [
   },
   {
     cle: "reglages",
-    num: "09",
     titre: "Les réglages",
     sert: "Ton code, ton adresse, ta clé, et les deux modèles.",
     points: [
@@ -148,7 +168,6 @@ export const CHAPITRES = [
   },
   {
     cle: "cout",
-    num: "10",
     titre: "Ce que ça coûte",
     sert: "Un ordre de grandeur honnête, en continu.",
     points: [
@@ -159,9 +178,8 @@ export const CHAPITRES = [
   },
   {
     cle: "methode",
-    num: "11",
-    titre: "Ce que tu reçois — les huit sections",
-    sert: "La structure du prompt produit, et à quoi sert chaque section.",
+    titre: "Méthode Boris — les huit sections",
+    sert: "La structure du prompt produit par la méthode Boris, et à quoi sert chaque section.",
     points: [
       "Un prompt de la méthode Boris tient en huit sections, toujours les mêmes, toujours dans cet ordre. Elles décrivent un mandat, pas un cahier des charges : le but, les garde-fous, le moyen de vérifier, et le moment de s'arrêter.",
       "C'est court volontairement — moins de 3950 caractères. Un mandat long n'est pas un mandat plus clair : il devient une liste de tâches, et l'agent cesse de décider.",
@@ -170,8 +188,19 @@ export const CHAPITRES = [
     sections: SECTIONS_BORIS,
   },
   {
+    cle: "gantelet",
+    titre: "Boucle du gantelet — les sept mouvements",
+    sert: "La structure du prompt produit par la boucle du gantelet, et à quoi sert chaque mouvement.",
+    points: [
+      "Un prompt du gantelet tient en sept mouvements, en phrases pleines, sans titre ni puce. S'il avait besoin d'un titre pour rester lisible, c'est qu'il serait trop long.",
+      "Il est court exprès — autour de 170 mots. Toute sa force tient dans la référence à battre : le reste n'est que l'échafaudage qui oblige à s'y comparer pour de vrai.",
+      "Rien d'autre n'y entre : ni architecture, ni découpage, ni technologie, ni nombre de tours. Chaque instruction en trop est une décision retirée à l'agent, et il décide mieux une fois le travail commencé.",
+      "Les deux dernières lignes parlent à Claude Code : « /loop » relance tant que tu n'arrêtes pas, « ultracode » autorise le travail à plusieurs agents en parallèle. Avec un autre agent, elles se remplacent par la même consigne en français.",
+    ],
+    sections: MOUVEMENTS_GANTELET,
+  },
+  {
     cle: "securite",
-    num: "12",
     titre: "Sécurité et vie privée",
     sert: "Où vont tes données, et ce que personne ne peut lire.",
     points: [
@@ -183,6 +212,15 @@ export const CHAPITRES = [
     ],
   },
 ];
+
+/* Le numéro n'est plus écrit à la main : il se DÉDUIT du rang. Il était
+   sur chaque chapitre, en dur, et insérer un chapitre au milieu obligeait
+   à renuméroter les suivants — un numéro oublié n'aurait rien cassé, il
+   aurait juste menti, ce qui est pire dans une aide. */
+export const CHAPITRES = RAW_CHAPITRES.map((c, i) => ({
+  ...c,
+  num: String(i + 1).padStart(2, "0"),
+}));
 
 /* Le pied de page. Écrit ici et non dans le balisage : la mention légale
    et la note de sécurité sont du contenu, elles se relisent et se

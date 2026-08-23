@@ -544,6 +544,93 @@ sans cette dernière, « ça tient » voudrait dire « c'est tronqué ».
 
 ---
 
+## 27. Une seconde technique — la boucle du gantelet
+
+L'atelier ne connaissait qu'une méthode. Il en connaît deux, choisies avant
+d'écrire, sur deux tuiles au-dessus de l'idée.
+
+**Ce que c'est.** La *gauntlet loop* est une technique de **Matt Shumer**,
+écrite en construisant *Claude of Duty*, empaquetée en skill par **Jay E /
+RoboNuggets** (`github.com/robonuggets/gauntlet-loop`, **CC BY 4.0**) et reprise
+ici en français. L'attribution est une obligation de la licence : elle vit dans
+l'en-tête de `src/gauntlet.js` ET dans le chapitre « Les deux techniques » de
+l'aide, avec une assertion qui la tient.
+
+**Pourquoi elle n'est pas une variante de Boris.** Les deux répondent à deux
+questions différentes, et la différence tient en un mot : *où est la preuve*.
+Chez Boris elle est DANS le mandat — l'agent se donne des contrôles et les
+rejoue. Au gantelet elle est DEHORS — une chose réelle, déjà bonne, nommée,
+qu'un critique va chercher et met à côté du travail **à l'aveugle**. D'où deux
+objets qui n'ont rien en commun : huit sections contre sept mouvements, 3 950
+caractères contre 170 mots, une escalade contre une victoire.
+
+**Le choix d'architecture, et ce qu'il évite.** Semer des `if (technique ===
+…)` dans l'atelier garantissait la panne classique : un chemin oublié qui
+applique la règle de l'une au prompt de l'autre, *en silence*. Un vérificateur
+qui cherche huit sections dans un prompt de 170 mots dit « à refaire » sans que
+rien soit à refaire — et personne ne relit le code pour un verdict qui a l'air
+d'un avis. Chaque technique expose donc **le même contrat** (`src/techniques.js`)
+et l'atelier ne manipule plus qu'un objet `T` : plus une seule règle de méthode
+n'est écrite dans l'écran. Une assertion vérifie que le contrat est rempli des
+deux côtés, champ par champ — un champ manquant ne se voit pas au chargement,
+il se voit à la génération, une fois l'appel payé.
+
+Conséquences câblées, chacune pour une confusion possible :
+
+- **`generate.js` ne connaît plus aucune méthode** : il reçoit l'oracle, la
+  réparation et le choix de la meilleure tentative. Ses défauts restent ceux de
+  Boris — il n'en avait qu'une quand il a été écrit.
+- **Le choix de la meilleure tentative diffère.** Boris rend la plus COURTE
+  parmi celles dont seule la longueur pèche. Au gantelet une tentative peut
+  pécher **par le bas** (80 mots, trois mouvements manquants) et « la plus
+  courte » choisirait la plus mutilée : on garde la plus proche de la fenêtre.
+- **Une limite par technique** (`charLimit` / `charLimitGauntlet`). Un curseur
+  partagé aurait fait hériter à l'une le réglage choisi pour l'autre, et un
+  réglage hérité est indistinguable, à l'écran, d'un réglage choisi.
+- **Aucune clé de critère n'est commune aux deux grilles du juge** (`sortie` et
+  `economie` sont devenus `victoire` et `sobriete`). Le juge reconstruit ses
+  critères PAR CLÉ : deux homonymes auraient laissé une note de gantelet se
+  recomposer à moitié contre la grille de Boris — deux lignes justes, quatre
+  vides, et rien pour le dire.
+- **La technique suit l'entrée de bibliothèque**, et rouvrir un prompt bascule
+  l'atelier dessus. Sans cela, un prompt de gantelet rouvert sous Boris se
+  voyait mesurer contre huit sections absentes : pastille rouge et note « à
+  refaire » sur un prompt parfaitement valide.
+- **Le choix se verrouille dès qu'un prompt est au marbre.** Changer de
+  technique sous un prompt existant le ferait juger et corriger avec les règles
+  de l'autre, sans que rien ne le dise. « Nouveau prompt » rouvre le choix.
+- **Tout le texte d'écran vient de la technique** — bandeau, accroche, exemples
+  des champs vides, titre de l'étape 1. Laissés en dur, ils proposaient une app
+  d'échecs et citaient « TON PRODUIT » à quelqu'un venu écrire une page de
+  tarifs jugée contre Stripe : un exemple hors sujet se lit comme « tu t'es
+  trompé d'outil ».
+
+**L'oracle du gantelet.** Il compte en MOTS (110–210, visée 140–190) parce que
+c'est l'unité de la technique, mais garde un plafond en caractères comme Boris,
+parce que c'est ce que toute la plomberie mesure et enregistre. Il refuse, une
+assertion par faute que la technique nomme comme mortelle : barre absente,
+comparaison à l'aveugle retirée, critique sans contexte neuf, `/loop` ou
+`ultracode` manquants, **nombre de tours fixé** (on sort en gagnant, jamais en
+comptant), titres ou puces. Deux détails mesurés : les fautes de longueur
+commencent toutes par « longueur » — c'est à ce préfixe que le choix de la
+meilleure tentative reconnaît une faute réparable ; et les apostrophes
+typographiques sont normalisées avant recherche, sinon « l’aveugle » fait
+échouer une assertion qui a pourtant raison.
+
+**Ce qui a été éprouvé.** 43 assertions nouvelles, dont un aller-retour réel
+contre `api.anthropic.com` : Sonnet 5, ce méta-prompt, cet oracle — 188 mots au
+vert **du premier coup**. Un vérificateur trop strict ne se voit pas sur un
+texte écrit à la main pour lui plaire. L'exemple de référence passe son propre
+vérificateur (une assertion le tient), et les deux oracles sont prouvés NON
+interchangeables : celui de Boris rejette un prompt de gantelet, et l'inverse.
+
+**Langue et cible, tranchées avec Gabriel** : le prompt sort en **français**
+comme le reste de l'atelier, et garde `/loop` + `ultracode` — la forme Claude
+Code, la plus forte, et celle des agents qu'il lance. Le skill d'origine décrit
+la variante portable ; elle est documentée dans l'aide, pas produite.
+
+---
+
 ## Reste à la main de Gabriel
 
 - Vérifier un domaine d'envoi chez Resend, pour que le lien de

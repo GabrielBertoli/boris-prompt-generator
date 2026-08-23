@@ -10,22 +10,23 @@ import {
 import {
   DEFAULT_JUDGE,
   DEFAULT_WRITER,
-  HARD_LIMIT,
   MODELS,
-  auditInstruction,
   bandeDe,
-  baseConvoFor,
-  buildMeta,
-  capLimit,
-  correctionInstruction,
   costOf,
   countChars,
   formatCost,
   normalizeNote,
   parseJson,
-  targetWindow,
-  verifyPrompt,
 } from "./meta.js";
+/* L'atelier ne nomme plus aucune méthode : il tient un objet `T`, et
+   toutes les règles — longueur, étapes, oracle, grille du juge — en
+   sortent. Voir l'en-tête de `techniques.js` pour ce que ça évite. */
+import {
+  DEFAULT_TECHNIQUE,
+  TECHNIQUES,
+  estTechnique,
+  techniqueOf,
+} from "./techniques.js";
 import { createPortal } from "react-dom";
 import { MAX_ATTEMPTS, runVerifiedGeneration } from "./generate.js";
 import {
@@ -58,7 +59,14 @@ const SETTINGS_KEY = "atelier-boris:reglages";
 const DEFAULTS = {
   writer: DEFAULT_WRITER,
   judge: DEFAULT_JUDGE,
+  technique: DEFAULT_TECHNIQUE,
+  /* Une limite PAR technique, et non une pour les deux : un prompt Boris
+     se mesure en milliers de caractères, un prompt de gantelet en
+     centaines. Un curseur partagé aurait fait hériter à l'un le réglage
+     de l'autre — et le réglage hérité est indistinguable, à l'écran, du
+     réglage choisi. */
   charLimit: 3900,
+  charLimitGauntlet: 1300,
 };
 
 function loadSettings() {
@@ -69,13 +77,22 @@ function loadSettings() {
     /* 3000 était l'ancien défaut, que personne n'avait touché : on le
        migre vers 3900. Une valeur choisie à la main est conservée. */
     const stored = parsed.charLimit === 3000 ? DEFAULTS.charLimit : parsed.charLimit;
+    const gauntlet = techniqueOf("gauntlet");
     return {
       writer: MODELS.some((m) => m.id === parsed.writer) ? parsed.writer : DEFAULTS.writer,
       judge: MODELS.some((m) => m.id === parsed.judge) ? parsed.judge : DEFAULTS.judge,
+      /* Un réglage enregistré avant que la seconde technique existe n'a pas
+         de technique : c'est Boris, la seule qu'il pouvait désigner. */
+      technique: estTechnique(parsed.technique) ? parsed.technique : DEFAULTS.technique,
       /* Un réglage enregistré AVANT le plafond peut valoir 8000 : il est
          ramené au plafond à la relecture, sinon l'écran continuerait
          d'annoncer une limite que le vérificateur n'applique plus. */
-      charLimit: Number.isFinite(stored) ? capLimit(stored) : DEFAULTS.charLimit,
+      charLimit: Number.isFinite(stored)
+        ? techniqueOf("boris").capLimit(stored)
+        : DEFAULTS.charLimit,
+      charLimitGauntlet: Number.isFinite(parsed.charLimitGauntlet)
+        ? gauntlet.capLimit(parsed.charLimitGauntlet)
+        : DEFAULTS.charLimitGauntlet,
     };
   } catch {
     return DEFAULTS;
@@ -107,6 +124,11 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   const [settings, setSettings] = useState(loadSettings);
   const [sheet, setSheet] = useState(null); // null | "reglages" | "edition"
 
+  /* La technique en vigueur, et SA limite. Tout ce qui suit passe par ces
+     deux-là : plus une seule règle de méthode n'est écrite dans l'écran. */
+  const T = useMemo(() => techniqueOf(settings.technique), [settings.technique]);
+  const limite = T.capLimit(settings[T.cleReglage]);
+
   /* La clé personnelle prime ; à défaut, celle de l'atelier. */
   const apiKey = ownKey || sharedKey || "";
   const usingShared = !ownKey && Boolean(sharedKey);
@@ -124,9 +146,17 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   const [constraints, setConstraints] = useState("");
   const [showConstraints, setShowConstraints] = useState(false);
 
-  const [phase, setPhase] = useState("idle"); // idle | analyzing | questions | generating | done
+  const [phase, setPhase] = useState("idle"); // idle | analyzing | choix | generating | done
+  /* L'étape 1 a deux formes selon la technique — des questions à remplir
+     (Boris) ou des barres à choisir (gantelet) — mais UNE seule phase :
+     c'est le même moment du travail, et lui donner deux phases aurait
+     doublé chaque test de `phase` de l'écran. */
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
+  const [barres, setBarres] = useState([]);
+  const [barreChoisie, setBarreChoisie] = useState("");
+  const [barrePerso, setBarrePerso] = useState("");
+  const [mesure, setMesure] = useState("");
   const [history, setHistory] = useState([]);
   const [prompt, setPrompt] = useState("");
   const [verif, setVerif] = useState(null);
@@ -346,11 +376,18 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   /* ---------- cœur : génération sous assertions ---------- */
   const generateVerified = (baseConvo, instruction) =>
     runVerifiedGeneration({
-      ask: (convo) => ask(convo, settings.writer, budget(settings.charLimit)),
+      ask: (convo) => ask(convo, settings.writer, budget(limite)),
       baseConvo,
       instruction,
-      limit: settings.charLimit,
+      limit: limite,
       onLog: pushLog,
+      /* Passés explicitement : sans eux la boucle applique son défaut, qui
+         est l'oracle de Boris — huit sections cherchées dans un prompt de
+         gantelet, cinq réparations payées, et un refus final sur une faute
+         qui n'existe pas. */
+      verify: T.verifyPrompt,
+      ...(T.repairInstruction ? { repair: T.repairInstruction } : {}),
+      ...(T.choisirMeilleure ? { choisir: T.choisirMeilleure } : {}),
     });
 
   /* Rien au-dessus du plafond ne quitte l'atelier.
@@ -365,7 +402,11 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     "un prompt hors limite est refusé par l'agent à qui tu le donnes. " +
     "Relance, ou resserre l'idée de départ : une idée très large produit un prompt long.";
 
-  /* ---------- phase 1 : analyse et questions ---------- */
+  /* ---------- phase 1 : ce qui manque avant d'écrire ----------
+     Boris demande les informations matérielles ; le gantelet propose des
+     barres. Même contrat dans les deux cas : si rien ne manque — aucune
+     question, ou une barre déjà nommée dans l'idée — on enchaîne sur la
+     génération sans rien demander. */
   const analyze = async () => {
     if (!apiKey) {
       setError(
@@ -396,6 +437,10 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     setActiveId(null);
     setSaveState("idle");
     setRunCost({ writer: 0, judge: 0 });
+    setBarres([]);
+    setBarreChoisie("");
+    setBarrePerso("");
+    setMesure("");
     setPhase("analyzing");
     ouvrirArret();
 
@@ -405,29 +450,61 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     const first = {
       role: "user",
       content:
-        buildMeta(settings.charLimit) +
+        T.buildMeta(limite) +
         "\n\nIDÉE :\n" +
         idea.trim() +
         (constraints.trim() ? "\n\nCONTRAINTES IMPOSÉES :\n" + constraints.trim() : "") +
-        "\n\nÉTAPE 1 — Avant d'écrire le prompt, détermine s'il manque une information qui changerait MATÉRIELLEMENT le terrain, l'escalade ou la sortie. " +
-        "Tout ce qui peut être tranché par une hypothèse raisonnable doit l'être, sans question. " +
-        'Réponds UNIQUEMENT avec ce JSON, sans autre texte : {"questions":["..."]} — 3 questions maximum, tableau vide si rien de matériel ne manque.',
+        "\n\n" +
+        T.etape1.instruction(),
     };
 
     try {
       const raw = await ask([first], settings.writer, 1200);
       const parsed = parseJson(raw);
-      const qs = Array.isArray(parsed.questions) ? parsed.questions.slice(0, 3) : [];
       const nextHistory = [first, { role: "assistant", content: raw }];
       setHistory(nextHistory);
 
-      if (qs.length === 0) {
-        pushLog("Analyse : rien de matériel ne manque — hypothèses tranchées.");
-        await generate(nextHistory, null);
+      if (T.etape1.cle === "barres") {
+        const imposee = String(parsed.barreImposee || "").trim();
+        const proposees = Array.isArray(parsed.barres)
+          ? parsed.barres
+              .filter((b) => b && String(b.titre || "").trim())
+              .slice(0, 3)
+              .map((b) => ({
+                titre: String(b.titre).trim(),
+                pourquoi: String(b.pourquoi || "").trim(),
+              }))
+          : [];
+        const mesuree = String(parsed.mesure || "").trim();
+        setMesure(mesuree);
+
+        if (imposee) {
+          pushLog(`Barre reprise de l'idée : ${imposee}`);
+          await generate(nextHistory, null, { barre: imposee, mesure: mesuree });
+        } else if (proposees.length === 0) {
+          /* Aucune barre proposée et aucune imposée : c'est un échec de
+             l'étape, pas un feu vert. Générer quand même produirait un
+             prompt SANS barre — la seule faute que cette technique ne
+             survit pas. */
+          setError(
+            "Aucune barre n'a pu être proposée. Précise ce que tu vises, ou nomme toi-même une référence réelle (une page, un dépôt, un article) dans l'idée."
+          );
+          setPhase("idle");
+        } else {
+          setBarres(proposees);
+          setBarreChoisie(proposees[0].titre);
+          setPhase("choix");
+        }
       } else {
-        setQuestions(qs);
-        setAnswers({});
-        setPhase("questions");
+        const qs = Array.isArray(parsed.questions) ? parsed.questions.slice(0, 3) : [];
+        if (qs.length === 0) {
+          pushLog("Analyse : rien de matériel ne manque — hypothèses tranchées.");
+          await generate(nextHistory, null);
+        } else {
+          setQuestions(qs);
+          setAnswers({});
+          setPhase("choix");
+        }
       }
     } catch (e) {
       setError(estArret(e) ? "Arrêté. Rien n'a été écrasé — la version en place n'a pas bougé. Corrige ta demande et relance." : `L'analyse a échoué : ${e.message}`);
@@ -438,7 +515,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   };
 
   /* ---------- phase 2 : génération ---------- */
-  const generate = async (baseHistory, answersMap) => {
+  const generate = async (baseHistory, answersMap, barreCtx) => {
     setPhase("generating");
     /* Son propre chantier : le bouton « Générer le prompt » l'appelle en
        direct, sans passer par l'analyse — sans cela, ce départ-là était le
@@ -446,22 +523,13 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     ouvrirArret();
     pushLog("Génération du prompt — v1…");
 
-    let instruction =
-      "ÉTAPE 2 — Génère MAINTENANT le system prompt final. Texte brut uniquement : pas de backticks, pas de commentaire, pas de préambule. " +
-      `Huit sections '# EN MAJUSCULES', moins de ${settings.charLimit} caractères, ` +
-      `vise ${targetWindow(settings.charLimit).lo} à ${targetWindow(settings.charLimit).hi}.`;
-
-    if (answersMap) {
-      const lines = questions
-        .map(
-          (q, i) =>
-            `Q${i + 1} : ${q}\nR : ` +
-            (answersMap[i] ||
-              "(sans réponse — tranche par hypothèse raisonnable et signale-la dans le dépôt)")
-        )
-        .join("\n");
-      instruction = `RÉPONSES :\n${lines}\n\n${instruction}`;
-    }
+    const instruction = T.etape2Instruction({
+      limit: limite,
+      questions,
+      answers: answersMap,
+      barre: barreCtx?.barre ?? barreChoisie,
+      mesure: barreCtx?.mesure ?? mesure,
+    });
 
     try {
       const res = await generateVerified(baseHistory, instruction);
@@ -500,7 +568,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
       setError(estArret(e) ? "Arrêté. Rien n'a été écrasé — la version en place n'a pas bougé. Corrige ta demande et relance." : `La génération a échoué : ${e.message}`);
       /* Arrêtée en route : on retombe là où l'on peut REPRENDRE — sur les
          questions si elles ont été posées, sur l'idée sinon. */
-      setPhase(answersMap ? "questions" : "idle");
+      setPhase(answersMap || barreCtx ? "choix" : "idle");
     } finally {
       fermerArret();
     }
@@ -523,7 +591,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
       /* Le juge n'est jamais le modèle qui a produit : angles morts
          corrélés (règle du playbook). */
       const raw = await ask(
-        [...convo, { role: "user", content: auditInstruction() }],
+        [...convo, { role: "user", content: T.auditInstruction() }],
         settings.judge,
         1600,
         "judge"
@@ -534,9 +602,13 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
         failles: Array.isArray(parsed.failles) ? parsed.failles.slice(0, 3) : [],
         hypotheses: Array.isArray(parsed.hypotheses) ? parsed.hypotheses.slice(0, 3) : [],
       };
+      /* La grille du juge est celle de la TECHNIQUE : passée ici parce que
+         le normaliseur reconstruit les critères par clé, et que six clés
+         inconnues rendraient six lignes vides sous une note juste. */
       const n = normalizeNote(
         { ...parsed, pourVersion: versionCourante ?? version },
-        settings.judge
+        settings.judge,
+        T.CRITERES
       );
       setAudit(verdict);
       setNote(n);
@@ -579,10 +651,10 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     setAudit(null);
     const convo = history.length
       ? history
-      : baseConvoFor({
+      : T.baseConvoFor({
           idea: idea + (constraints.trim() ? `\n\nCONTRAINTES IMPOSÉES :\n${constraints.trim()}` : ""),
           prompt,
-          limit: settings.charLimit,
+          limit: limite,
         });
     ouvrirArret();
     try {
@@ -614,12 +686,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     setChat(withDemand);
 
     try {
-      const instruction =
-        "ÉTAPE 4 — Applique chacune de ces corrections au prompt ci-dessus :\n" +
-        corrections +
-        "\nRégénère le prompt COMPLET corrigé (les huit sections jusqu'à # SORTIE incluse), texte brut uniquement, " +
-        `sans backticks ni commentaire, moins de ${settings.charLimit} caractères, ` +
-        `vise ${targetWindow(settings.charLimit).lo} à ${targetWindow(settings.charLimit).hi}.`;
+      const instruction = T.auditApplyInstruction(corrections, limite);
       const res = await generateVerified(history, instruction);
       setHistory(res.convo);
       setVerif(res.check);
@@ -687,6 +754,10 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     setPhase("idle");
     setQuestions([]);
     setAnswers({});
+    setBarres([]);
+    setBarreChoisie("");
+    setBarrePerso("");
+    setMesure("");
     setHistory([]);
     setPrompt("");
     setVerif(null);
@@ -760,7 +831,8 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     const entry = makeEntry({
       idea,
       prompt: text,
-      limit: settings.charLimit,
+      limit: limite,
+      technique: T.id,
       version: v,
       chat: thread,
       note: n,
@@ -803,12 +875,12 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
          accumulée : le modèle voit la méthode, l'idée et le dernier état.
          C'est borné en coût, et surtout identique avant et après un
          rechargement — le fil se comporte pareil dans les deux cas. */
-      const base = baseConvoFor({
+      const base = T.baseConvoFor({
         idea: idea + (constraints.trim() ? `\n\nCONTRAINTES IMPOSÉES :\n${constraints.trim()}` : ""),
         prompt,
-        limit: settings.charLimit,
+        limit: limite,
       });
-      const res = await generateVerified(base, correctionInstruction(asked, settings.charLimit));
+      const res = await generateVerified(base, T.correctionInstruction(asked, limite));
 
       setHistory(res.convo);
       setVerif(res.check);
@@ -884,17 +956,31 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     }
   };
 
-  /* Rouvrir un prompt de la bibliothèque dans l'atelier, avec son fil. */
+  /* Rouvrir un prompt de la bibliothèque dans l'atelier, avec son fil.
+
+     L'atelier BASCULE sur la technique de l'entrée : reprendre un prompt,
+     c'est reprendre sa méthode. Sans cette bascule, un prompt de gantelet
+     rouvert dans un atelier réglé sur Boris se voyait mesurer contre huit
+     sections absentes — pastille rouge, note à refaire, sur un prompt
+     parfaitement valide. */
   const resumeThread = (item) => {
+    const Titem = techniqueOf(item.technique);
+    if (item.technique && item.technique !== settings.technique) {
+      setSettings((s) => ({ ...s, technique: Titem.id }));
+    }
     setActiveId(item.id);
     setIdea(item.idea || "");
     setPrompt(item.prompt);
     setChat(Array.isArray(item.chat) ? item.chat : []);
     setVersion(item.version || 1);
-    setVerif(verifyPrompt(item.prompt, item.limit || settings.charLimit));
+    setVerif(Titem.verifyPrompt(item.prompt, item.limit || Titem.limiteDefaut));
     setHistory([]);
     setQuestions([]);
     setAnswers({});
+    setBarres([]);
+    setBarreChoisie("");
+    setBarrePerso("");
+    setMesure("");
     setAudit(null);
     setNote(item.note || null);
     setNoteOuverte(false);
@@ -918,11 +1004,11 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
       text: turn.text,
       version: nextVersion,
       count,
-      pass: verifyPrompt(turn.text, settings.charLimit).pass,
+      pass: T.verifyPrompt(turn.text, limite).pass,
     });
     setPrompt(turn.text);
     setVersion(nextVersion);
-    setVerif(verifyPrompt(turn.text, settings.charLimit));
+    setVerif(T.verifyPrompt(turn.text, limite));
     setHistory([]);
     setChat(full);
     pushLog(`Version v${turn.version} remise en place → v${nextVersion}.`);
@@ -1023,7 +1109,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   /* Le prompt affiché n'est pas encore une entrée : on en fabrique une, le
      temps de l'imprimer ou de la télécharger. Elle n'est pas enregistrée. */
   const currentEntry = () =>
-    makeEntry({ idea, prompt, limit: settings.charLimit, version, note: noteCourante });
+    makeEntry({ idea, prompt, limit: limite, version, note: noteCourante, technique: T.id });
 
   /* ---------- impression ----------
      La feuille sort du #root par un portail : la règle d'impression masque
@@ -1335,7 +1421,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
                   rows={3}
                   value={demand}
                   onChange={(e) => setDemand(e.target.value)}
-                  placeholder="Ex. : durcis l'escalade, cite le nom du dépôt dans TON PRODUIT, allège la VÉRIFICATION…"
+                  placeholder={T.exempleCorrection}
                   /* Entrée+Cmd (ou Ctrl) envoie : la touche Entrée seule doit
                      rester libre, une consigne tient souvent en trois lignes. */
                   onKeyDown={(e) => {
@@ -1415,9 +1501,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
             au-dessus de chaque prompt. */}
         {!enTravail && (
           <section className="rise pt-12 pb-10 sm:pt-16">
-            <div className="eyebrow mb-4">
-              But — Garde-fous — Vérificateur — Sortie
-            </div>
+            <div className="eyebrow mb-4">{T.bandeau}</div>
             <h1 className="display text-[clamp(38px,6.6vw,64px)]">
               Bonjour {user.name}.
               <br />
@@ -1428,17 +1512,12 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
                 recevoir. Les mots du métier — oracle, escalade, invariants,
                 sortie verrouillée — sont ce que l'atelier ÉCRIT, pas ce
                 qu'il faut savoir pour s'en servir. */}
-            <p className="lede mt-6">
-              Raconte ce que tu veux confier, comme tu l'expliquerais à quelqu'un à qui tu
-              donnes le travail. L'atelier en écrit le <em>mandat</em> : ce qu'il doit obtenir,
-              ce qu'il n'a pas le droit de faire, à quoi on verra que c'est réussi, et quand il
-              doit s'arrêter pour te demander. Une question ne t'est posée que si la réponse
-              change vraiment le résultat.
-            </p>
+            <p className="lede mt-6">{T.accroche}</p>
 
             <div className="mt-8 flex flex-wrap gap-2">
               <span className="tag tag-accent">{library.length} prompt{library.length > 1 ? "s" : ""} en bibliothèque</span>
-              <span className="tag">limite {settings.charLimit} car.</span>
+              <span className="tag tag-accent" data-tip={T.quand}>{T.nom}</span>
+              <span className="tag">limite {limite} car.</span>
               <span className={apiKey ? "tag tag-ok" : "tag tag-ko"}>
                 {usingShared ? "clé de l'atelier" : apiKey ? "ta clé" : "clé manquante"}
               </span>
@@ -1484,15 +1563,43 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
             </div>
           ) : (
             <>
+              {/* Le choix de la technique est ICI, au-dessus de l'idée, et
+                  pas dans les réglages : il ne se règle pas une fois pour
+                  toutes, il se décide à chaque travail — ce sont deux
+                  produits différents, pas deux préférences.
+
+                  Il se verrouille dès qu'un prompt est au marbre : changer
+                  de technique sous un prompt existant ferait juger et
+                  corriger ce prompt-là avec les règles de l'autre méthode,
+                  sans que rien à l'écran ne le dise. « Nouveau prompt »
+                  rouvre le choix. */}
+              <div className="techniques" role="group" aria-label="Technique">
+                {TECHNIQUES.map((t) => {
+                  const active = t.id === T.id;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={active ? "technique technique-active" : "technique"}
+                      aria-pressed={active}
+                      disabled={busy || Boolean(prompt)}
+                      data-tip={prompt ? "Recommencer pour changer de technique" : t.quand}
+                      onClick={() => setSettings({ ...settings, technique: t.id })}
+                    >
+                      <span className="technique-nom">{t.nom}</span>
+                      <span className="technique-resume">{t.resume}</span>
+                      <span className="technique-sortie mono">{t.sortie}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
               <textarea
                 rows={6}
                 value={idea}
                 onChange={(e) => setIdea(e.target.value)}
                 disabled={busy}
-                placeholder={
-                  "Exemple : une app d'échecs en ligne — parties en direct, classement Elo, puzzles quotidiens ; l'humain ne valide que les mises en production…\n\n" +
-                  "Ou : un algo de ML qui prédit les ruptures de stock d'un e-commerce depuis l'historique de ventes, réentraîné chaque nuit, avec un tableau de bord de dérive…"
-                }
+                placeholder={T.exempleIdee}
               />
 
               <button
@@ -1511,7 +1618,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
                     value={constraints}
                     onChange={(e) => setConstraints(e.target.value)}
                     disabled={busy}
-                    placeholder="Technologies imposées, système d'enregistrement, actions engageantes propres au domaine, critère de sortie souhaité…"
+                    placeholder={T.exempleContraintes}
                   />
                 </div>
               )}
@@ -1521,7 +1628,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
                   className="btn btn-primary"
                   type="button"
                   onClick={analyze}
-                  disabled={busy || phase === "questions"}
+                  disabled={busy || phase === "choix"}
                 >
                   {phase === "analyzing" ? "Analyse en cours…" : "Analyser l'idée"}
                 </button>
@@ -1539,7 +1646,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
                     Replier l'idée
                   </button>
                 )}
-                {(phase === "done" || phase === "questions") && (
+                {(phase === "done" || phase === "choix") && (
                   <button className="btn btn-ghost" type="button" onClick={reset} disabled={busy}>
                     Recommencer
                   </button>
@@ -1554,44 +1661,117 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           {error && <p className="note note-error mt-5">{error}</p>}
         </section>
 
-        {/* ================= 01 · questions ================= */}
-        {phase === "questions" && (
+        {/* ================= 01 · ce qui manque avant d'écrire =========
+            Une seule phase, deux formes : Boris pose des questions, le
+            gantelet fait choisir une barre. Le titre vient de la
+            technique — écrire « Questions matérielles » au-dessus d'une
+            liste de références serait un mensonge d'écran. */}
+        {phase === "choix" && (
           <section className="card rise mt-6 p-6 sm:p-7">
             <div className="section-head">
               <span className="section-num">01</span>
-              <span className="section-title">Questions matérielles</span>
+              <span className="section-title">{T.etape1.titre}</span>
               <span className="section-line" />
             </div>
 
-            <p className="lede mb-5 text-[14.5px]">
-              Chaque réponse change le terrain, l'escalade ou la sortie. Une réponse laissée vide
-              sera tranchée par hypothèse raisonnable, signalée dans le prompt.
-            </p>
+            {T.etape1.cle === "barres" ? (
+              <>
+                <p className="lede mb-5 text-[14.5px]">
+                  C'est la barre qui fait tout : l'agent ira chercher cette chose-là et
+                  recommencera jusqu'à la battre à l'aveugle. Choisis la plus dure qu'il puisse
+                  réellement atteindre — une barre trop facile fait sortir la boucle au premier
+                  tour, une barre vague la fait tout approuver.
+                </p>
 
-            <div className="flex flex-col gap-4">
-              {questions.map((q, i) => (
-                <div key={i} className="card-inset p-4">
-                  <div className="mono mb-2 text-xs" style={{ color: "var(--ember)" }}>
-                    Q{i + 1}
-                  </div>
-                  <p className="mb-3 text-[14.5px] leading-relaxed">{q}</p>
-                  <input
-                    type="text"
-                    value={answers[i] || ""}
-                    onChange={(e) => setAnswers({ ...answers, [i]: e.target.value })}
-                    placeholder="Ta réponse (ou laisse vide)"
-                  />
+                <div className="flex flex-col gap-4">
+                  {barres.map((b, i) => {
+                    const active = !barrePerso.trim() && barreChoisie === b.titre;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        className={active ? "barre barre-active" : "barre"}
+                        aria-pressed={active}
+                        onClick={() => {
+                          setBarreChoisie(b.titre);
+                          setBarrePerso("");
+                        }}
+                      >
+                        <span className="mono barre-lettre">{"ABC"[i] || "•"}</span>
+                        <span className="barre-corps">
+                          <span className="barre-titre">{b.titre}</span>
+                          {b.pourquoi && <span className="barre-pourquoi">{b.pourquoi}</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
 
-            <button
-              className="btn btn-primary mt-6"
-              type="button"
-              onClick={() => generate(history, answers)}
-            >
-              Générer le prompt
-            </button>
+                <label className="field-label mt-5" htmlFor="barre-perso">
+                  Ou la tienne — nommée, récupérable, comparable
+                </label>
+                <input
+                  id="barre-perso"
+                  type="text"
+                  value={barrePerso}
+                  onChange={(e) => setBarrePerso(e.target.value)}
+                  placeholder="Une page, un dépôt, un article, un produit précis…"
+                />
+
+                {mesure && (
+                  <p className="note note-info mt-4">
+                    Moitié mesurable repérée : {mesure}. Elle entrera dans le prompt à côté de la
+                    référence — le goût plus un chiffre bat le goût seul.
+                  </p>
+                )}
+
+                <button
+                  className="btn btn-primary mt-6"
+                  type="button"
+                  disabled={!barrePerso.trim() && !barreChoisie.trim()}
+                  onClick={() =>
+                    generate(history, null, {
+                      barre: barrePerso.trim() || barreChoisie,
+                      mesure,
+                    })
+                  }
+                >
+                  Générer le prompt
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="lede mb-5 text-[14.5px]">
+                  Chaque réponse change le terrain, l'escalade ou la sortie. Une réponse laissée vide
+                  sera tranchée par hypothèse raisonnable, signalée dans le prompt.
+                </p>
+
+                <div className="flex flex-col gap-4">
+                  {questions.map((q, i) => (
+                    <div key={i} className="card-inset p-4">
+                      <div className="mono mb-2 text-xs" style={{ color: "var(--ember)" }}>
+                        Q{i + 1}
+                      </div>
+                      <p className="mb-3 text-[14.5px] leading-relaxed">{q}</p>
+                      <input
+                        type="text"
+                        value={answers[i] || ""}
+                        onChange={(e) => setAnswers({ ...answers, [i]: e.target.value })}
+                        placeholder="Ta réponse (ou laisse vide)"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  className="btn btn-primary mt-6"
+                  type="button"
+                  onClick={() => generate(history, answers)}
+                >
+                  Générer le prompt
+                </button>
+              </>
+            )}
           </section>
         )}
 
@@ -1756,7 +1936,8 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
                       ⋯
                     </button>
                     <span className={verif?.pass ? "tag tag-ok" : "tag tag-ko"}>
-                      {count} car. · limite {settings.charLimit}
+                      {count} car. · limite {limite}
+                      {verif?.mots != null && ` · ${verif.mots} mots`}
                     </span>
                     {noteCourante?.juge && <span className="tag">juge {noteCourante.juge}</span>}
                   </div>
@@ -2011,8 +2192,9 @@ function AideSheet({ onClose }) {
           de l'écran.
         </p>
 
-        {/* Le sommaire : douze chapitres se parcourent, ils ne se
-            déroulent pas. */}
+        {/* Le sommaire : les chapitres se parcourent, ils ne se déroulent
+            pas. (Leur nombre n'est plus écrit ici : il a été faux le jour
+            où il y en a eu quatorze.) */}
         <nav className="aide-sommaire" aria-label="Sommaire">
           {CHAPITRES.map((c) => (
             <a key={c.cle} className="aide-lien" href={`#aide-${c.cle}`}>
@@ -2605,23 +2787,35 @@ function SettingsSheet({
           </p>
         )}
 
-        <label className="field-label mt-4" htmlFor="limit">
-          Limite de caractères — {settings.charLimit}
-        </label>
-        <input
-          id="limit"
-          type="number"
-          min={1500}
-          max={HARD_LIMIT}
-          step={50}
-          value={settings.charLimit}
-          onChange={(e) => setSettings({ ...settings, charLimit: capLimit(e.target.value) })}
-        />
-        <p className="lede mt-2 text-[13px]">
-          Ce réglage descend, il ne monte pas : {HARD_LIMIT} caractères est un plafond dur.
-          Il montait à 8000, et le vérificateur comparait à ce nombre-là — un prompt de plus
-          de 4000 caractères en sortait « au vert ».
-        </p>
+        {/* Une limite par technique, et le curseur montre celle de la
+            technique ARMÉE : un seul curseur pour deux méthodes ferait
+            croire qu'on règle le prompt qu'on a sous les yeux alors qu'on
+            règle l'autre. Le nom de la technique est écrit dessus pour
+            qu'aucune ambiguïté ne subsiste. */}
+        {TECHNIQUES.map((t) => (
+          <div key={t.id} hidden={t.id !== techniqueOf(settings.technique).id}>
+            <label className="field-label mt-4" htmlFor={`limit-${t.id}`}>
+              Limite de caractères — {t.nom} — {t.capLimit(settings[t.cleReglage])}
+            </label>
+            <input
+              id={`limit-${t.id}`}
+              type="number"
+              min={t.limiteMin}
+              max={t.hardLimit}
+              step={50}
+              value={settings[t.cleReglage]}
+              onChange={(e) =>
+                setSettings({ ...settings, [t.cleReglage]: t.capLimit(e.target.value) })
+              }
+            />
+            <p className="lede mt-2 text-[13px]">
+              Ce réglage descend, il ne monte pas : {t.hardLimit} caractères est un plafond dur.
+              {t.id === "boris"
+                ? " Il montait à 8000, et le vérificateur comparait à ce nombre-là — un prompt de plus de 4000 caractères en sortait « au vert »."
+                : ` Le prompt du gantelet se mesure d'abord en MOTS — ${t.fenetre().lo} à ${t.fenetre().hi} — et le plafond en caractères n'est là que pour arrêter un débordement franc.`}
+            </p>
+          </div>
+        ))}
 
         {/* ---------- compte ---------- */}
         <div className="section-head mt-8">
@@ -2696,7 +2890,11 @@ function SettingsSheet({
 
 function EditorSheet({ draft, setDraft, onSave, onClose }) {
   const length = countChars(draft.prompt);
-  const check = verifyPrompt(draft.prompt, draft.limit || 3000);
+  /* L'éditeur mesure l'entrée avec la technique de l'ENTRÉE, pas celle
+     de l'atelier : on peut éditer un prompt de gantelet en ayant Boris
+     armé à l'écran, et l'inverse. */
+  const Tdraft = techniqueOf(draft.technique);
+  const check = Tdraft.verifyPrompt(draft.prompt, draft.limit || Tdraft.limiteDefaut);
   const [copiedDraft, setCopiedDraft] = useState(false);
 
   return (

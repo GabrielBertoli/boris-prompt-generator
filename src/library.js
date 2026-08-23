@@ -7,6 +7,7 @@
 
 import { api } from "./api.js";
 import { normalizeNote } from "./meta.js";
+import { DEFAULT_TECHNIQUE, estTechnique, techniqueOf } from "./techniques.js";
 
 const localKey = (userId) => `atelier-boris:bibliotheque:${userId}`;
 
@@ -57,13 +58,20 @@ export const countChars = (value) => [...String(value)].length;
    l'interface comme dans ce qui s'enregistre. */
 export const fr = (n) => String(n).replace(".", ",");
 
-export function makeEntry({ idea, mode, prompt, limit, version, title, chat, note }) {
+export function makeEntry({ idea, mode, prompt, limit, version, title, chat, note, technique }) {
   const now = new Date().toISOString();
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     title: (title || idea || "").trim().slice(0, 90) || "Sans titre",
     idea: (idea || "").trim(),
     mode: mode === "existante" ? "existante" : "nouvelle",
+    /* La technique suit le prompt, et elle doit : rouvrir une entrée, c'est
+       reprendre son fil avec SA méthode — son vérificateur, sa grille de
+       juge, sa longueur. Sans ce champ, rouvrir un prompt de gantelet dans
+       un atelier réglé sur Boris le déclarait « à refaire » pour huit
+       sections absentes qu'il n'a jamais eu à avoir. Une entrée écrite
+       avant que ce champ existe est de Boris : c'était la seule. */
+    technique: estTechnique(technique) ? technique : DEFAULT_TECHNIQUE,
     prompt,
     count: countChars(prompt),
     limit,
@@ -184,7 +192,7 @@ export function toMarkdown(entry) {
   const lines = [
     `# ${entry.title || "Sans titre"}`,
     "",
-    `> v${entry.version} · ${entry.count} caractères · limite ${entry.limit}`,
+    `> ${techniqueOf(entry.technique).nom} · v${entry.version} · ${entry.count} caractères · limite ${entry.limit}`,
     `> Enregistré le ${formatDate(entry.savedAt)}${modifie}`,
   ];
   if (entry.idea) lines.push("", "## L'idée de départ", "", entry.idea);
@@ -232,6 +240,7 @@ function normalize(raw) {
     id: typeof raw.id === "string" && raw.id ? raw.id : newId(),
     title: String(raw.title || raw.idea || "").trim().slice(0, 160) || "Sans titre",
     idea: String(raw.idea || "").trim(),
+    technique: estTechnique(raw.technique) ? raw.technique : DEFAULT_TECHNIQUE,
     prompt,
     count: countChars(prompt),
     limit: Number(raw.limit) > 0 ? Number(raw.limit) : 3900,
@@ -249,11 +258,11 @@ function normalize(raw) {
               ...(t.count ? { count: Number(t.count) } : {}),
               ...(t.pass != null ? { pass: Boolean(t.pass) } : {}),
               ...(t.compacted ? { compacted: true } : {}),
-              ...(noteDe(t) ? { note: noteDe(t) } : {}),
+              ...(noteDe(t, raw.technique) ? { note: noteDe(t, raw.technique) } : {}),
             }))
         )
       : [],
-    ...(noteDe(raw) ? { note: noteDe(raw) } : {}),
+    ...(noteDe(raw, raw.technique) ? { note: noteDe(raw, raw.technique) } : {}),
     savedAt,
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : savedAt,
   };
@@ -262,8 +271,10 @@ function normalize(raw) {
 /* Une note importée passe par le même normaliseur que celle du juge :
    nombres bornés, critères reconstruits par clé. Un fichier trafiqué ne
    peut donc pas poser une note de 47 dans une jauge sur 10. */
-function noteDe(raw) {
-  return raw && raw.note != null ? normalizeNote(raw.note, raw.note?.juge) : null;
+function noteDe(raw, technique) {
+  return raw && raw.note != null
+    ? normalizeNote(raw.note, raw.note?.juge, techniqueOf(technique).CRITERES)
+    : null;
 }
 
 export function parseBundle(raw) {

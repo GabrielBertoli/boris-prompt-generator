@@ -241,7 +241,12 @@ export function auditInstruction() {
    champ par champ, et on borne les nombres. Une note de 47 ou de -3 —
    déjà vue quand un modèle note sur 100 — ferait sortir l'aiguille de la
    jauge sans que rien ne le signale. */
-export function normalizeNote(raw, juge) {
+/* `criteres` en paramètre : la grille dépend de la TECHNIQUE, et une note
+   de gantelet reconstruite contre la grille de Boris perdrait ses six
+   critères en silence — la jauge afficherait un chiffre juste au-dessus
+   de six lignes vides. Le défaut reste la grille Boris, la seule qui
+   existait quand les notes déjà enregistrées ont été écrites. */
+export function normalizeNote(raw, juge, criteres = CRITERES) {
   if (!raw || typeof raw !== "object") return null;
   const borne = (v) => {
     const n = Number(v);
@@ -249,7 +254,7 @@ export function normalizeNote(raw, juge) {
     return Math.min(10, Math.max(0, Math.round(n * 10) / 10));
   };
 
-  const criteres = CRITERES.map((c) => {
+  const grille = (Array.isArray(criteres) && criteres.length ? criteres : CRITERES).map((c) => {
     const trouve = Array.isArray(raw.criteres)
       ? raw.criteres.find((x) => x && String(x.cle) === c.cle)
       : null;
@@ -261,7 +266,7 @@ export function normalizeNote(raw, juge) {
     };
   });
 
-  const donnees = criteres.map((c) => c.note).filter((n) => n != null);
+  const donnees = grille.map((c) => c.note).filter((n) => n != null);
   const globale = borne(raw.note);
   /* Si le juge oublie la note globale, le plus faible des critères la
      remplace — jamais la moyenne : c'est précisément ce que la règle
@@ -272,7 +277,7 @@ export function normalizeNote(raw, juge) {
   return {
     note,
     verdict: String(raw.verdict || "").trim().slice(0, 400),
-    criteres,
+    criteres: grille,
     juge: juge || String(raw.juge || ""),
     /* De quelle version cette note parle. Le juge répond APRÈS que la
        version est enregistrée : sans ce numéro, une note de v2 restait

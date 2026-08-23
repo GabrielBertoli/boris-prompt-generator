@@ -10,11 +10,25 @@ import { verifyPrompt } from "./meta.js";
    exactement le nombre nécessaire — donc aucune marge. Cinq en laissent. */
 export const MAX_ATTEMPTS = 5;
 
-export async function runVerifiedGeneration({ ask, baseConvo, instruction, limit, onLog }) {
+/* La boucle ne connaît AUCUNE méthode : elle reçoit l'oracle, la
+   réparation et le choix de la meilleure tentative. Les valeurs par
+   défaut sont celles de la méthode Boris — l'atelier n'en avait qu'une
+   quand cette boucle a été écrite, et une seconde technique ne doit pas
+   pouvoir se glisser ici en dupliquant la mécanique. */
+export async function runVerifiedGeneration({
+  ask,
+  baseConvo,
+  instruction,
+  limit,
+  onLog,
+  verify = verifyPrompt,
+  repair = repairInstruction,
+  choisir = bestOf,
+}) {
   const convo = [...baseConvo, { role: "user", content: instruction }];
 
   let text = (await ask(convo)).trim();
-  let check = verifyPrompt(text, limit);
+  let check = verify(text, limit);
   let attempt = 1;
   const tries = [{ text, check }];
   report(onLog, attempt, check);
@@ -22,9 +36,9 @@ export async function runVerifiedGeneration({ ask, baseConvo, instruction, limit
   while (!check.pass && attempt < MAX_ATTEMPTS) {
     attempt += 1;
     convo.push({ role: "assistant", content: text });
-    convo.push({ role: "user", content: repairInstruction(check, limit, attempt) });
+    convo.push({ role: "user", content: repair(check, limit, attempt) });
     text = (await ask(convo)).trim();
-    check = verifyPrompt(text, limit);
+    check = verify(text, limit);
     tries.push({ text, check });
     report(onLog, attempt, check);
   }
@@ -33,7 +47,7 @@ export async function runVerifiedGeneration({ ask, baseConvo, instruction, limit
      Chaque serrage est un coup de dé — rien ne garantit que le cinquième a
      fait mieux que le troisième, et rendre le dernier revenait à jeter un
      texte plus court déjà obtenu et payé. */
-  const best = bestOf(tries);
+  const best = choisir(tries);
   convo.push({ role: "assistant", content: best.text });
   return { text: best.text, check: best.check, convo, attempts: attempt };
 }
