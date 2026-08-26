@@ -24,6 +24,48 @@ palier à 1800 px, mais il mesure des hauteurs — il ne clique pas.
 Déploiement précédent : 2026-08-02, commit `e87cbf3`, 228 au harnais + 142 au
 pilotage.
 
+## 2026-08-26 — le gantelet écrit désormais autour de 2500 caractères
+
+Demande de Gabriel : le générateur ne doit plus être limité à 1300 caractères
+mais à 2500. Il s'agit de la **boucle du gantelet** — Boris est à 3900 depuis le
+2026-08-02 et n'a pas bougé. Arbitrage complet dans **DECISIONS § 29**.
+
+**Ce qu'il ne fallait surtout pas faire : monter le seul plafond.** La longueur
+du gantelet est décidée par un compte en MOTS, pas en caractères ; le réglage
+serait passé à 2500 pendant que le méta-prompt continuait de demander 140 à 190
+mots, et le vérificateur aurait refusé pour excès de mots tout prompt qui aurait
+vraiment fait 2500 caractères. Curseur qui monte, rien qui change, rien en
+rouge.
+
+**Ce qui a bougé, ensemble, dans `src/gauntlet.js`** — le seul endroit où ces
+nombres vivent : visée **290–380 mots** (au lieu de 140–190), fourchette
+acceptée **230–420** (au lieu de 110–210), réglage par défaut **2500** (1300),
+plafond dur **3000** (1600), plancher du curseur **1700** (800, devenu
+incohérent : sous 1700 caractères le bas de la fenêtre de mots ne tient plus).
+Un réglage enregistré avant ce jour vaut 1300, donc sous le plancher : il est
+traité comme « jamais choisi » et rendu au défaut, plutôt que remonté au
+plancher par `capLimit`.
+
+**L'exemple de référence a été réécrit** (186 → 347 mots, 1 973 car.), parce
+qu'il est passé à son propre vérificateur par une assertion et surtout montré au
+modèle comme cible de forme : laissé court, il aurait enseigné la longueur qu'on
+venait d'abandonner. Mêmes sept mouvements, rien de gonflé.
+
+**Sept chiffres écrits à la main ont disparu** au passage (aide ×2,
+`techniques.js`, et quatre bornes du vérificateur) : tous auraient survécu au
+changement EN VERT, en mesurant la fenêtre d'avant. Ils se déduisent maintenant
+de `VISEE` / `MOTS_MIN` / `MOTS_MAX`.
+
+**Attribution CC BY 4.0 :** la licence autorise l'adaptation et impose de la
+signaler. Le skill d'origine prescrit 120 à 180 mots ; l'aide le dit maintenant
+noir sur blanc.
+
+**Vérifié :** `npm run build` au vert, `npm run verify` **290 assertions au
+vert**, appel Anthropic réel compris — le générateur a rendu un prompt de
+gantelet de **369 mots / 2 128 caractères du premier coup**, oracle au vert,
+sans réparation. **Pas déployé** : local uniquement, à promouvoir quand Gabriel
+le décide.
+
 ## 2026-08-23, 09h — le panneau du juge ne défilait pas
 
 Signalé par Gabriel une heure après la mise en ligne : le juge liste ses

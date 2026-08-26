@@ -11,9 +11,9 @@
    Boris écrit le mandat d'un agent qui fait tourner un produit et dérive
    son travail de là où la chaîne casse — prompt long, huit sections, un
    oracle interne. Le gantelet écrit le mandat d'un agent qui vise une
-   RÉFÉRENCE RÉELLE et recommence jusqu'à la battre — prompt court, sans
-   la moindre section, dont toute la force tient dans une seule chose :
-   la barre. L'oracle n'est pas dans le prompt, il est dehors, et c'est
+   RÉFÉRENCE RÉELLE et recommence jusqu'à la battre — un prompt d'un
+   seul tenant, sans la moindre section, dont toute la force tient dans
+   une seule chose : la barre. L'oracle n'est pas dans le prompt, il est dehors, et c'est
    ce qui rend la comparaison indiscutable.
 
    Les deux ne sont donc pas deux styles du même objet : elles répondent
@@ -28,20 +28,47 @@ export { countChars };
 
 /* ---------- la mesure ----------
 
-   Le skill d'origine dit « around 120 to 180 words ». Le français est
-   plus long d'environ 15 % à contenu égal : la fenêtre visée est donc
-   140–190 mots, et la fourchette acceptée 110–210. Le compte se fait en
-   MOTS, parce que c'est la règle de la technique — mais le plafond dur
-   reste en caractères, comme pour Boris, parce que c'est ce que toute la
-   plomberie de l'atelier mesure et enregistre déjà. Les deux vivent ici,
-   dans le vérificateur, et nulle part ailleurs. */
+   Le skill d'origine dit « around 120 to 180 words », et l'atelier l'a
+   suivi jusqu'au 2026-08-26 : visée 140–190 mots, réglage par défaut à
+   1300 caractères, plafond dur 1600. Gabriel a demandé ce jour-là des
+   prompts d'environ 2500 caractères — et la seule chose qu'il ne fallait
+   PAS faire était de monter le plafond tout seul. Ce qui décide de la
+   longueur ici est le compte en MOTS : avec la fenêtre à 190 mots, un
+   réglage à 2500 n'aurait rien changé au prompt produit, et un prompt de
+   2500 caractères se serait fait refuser par le vérificateur pour excès
+   de mots — un curseur qui monte sans effet visible, la panne la plus
+   coûteuse à diagnostiquer. Les deux comptes montent donc ENSEMBLE.
 
-export const HARD_LIMIT = 1600;
-export const MOTS_MIN = 110;
-export const MOTS_MAX = 210;
-export const VISEE = { lo: 140, hi: 190 };
-export const LIMITE_DEFAUT = 1300;
-export const LIMITE_MIN = 800;
+   Le rapport mesuré sur l'exemple de référence est de ~5,7 caractères
+   par mot dans ce français-là : le haut de la visée (380 mots) tombe
+   vers 2 170 caractères, sous le réglage de 2500 comme 190 mots
+   tombaient sous 1300. La fourchette acceptée haute (420 mots ≈ 2 400
+   car.) reste elle aussi sous le réglage : c'est la fourchette de mots
+   qui mord en premier, jamais le plafond, et c'est voulu.
+
+   Le compte se fait en MOTS parce que c'est la règle de la technique —
+   mais le plafond dur reste en caractères, comme pour Boris, parce que
+   c'est ce que toute la plomberie de l'atelier mesure et enregistre
+   déjà. Les deux vivent ici, dans le vérificateur, et nulle part
+   ailleurs.
+
+   `LIMITE_MIN` monte avec le reste (800 → 1700) et ce n'est pas
+   cosmétique : sous 1700 caractères, le BAS de la fenêtre de mots
+   (290 mots ≈ 1 650 car.) ne tient plus, et le curseur proposerait un
+   réglage où chaque génération échouerait sur la longueur sans qu'un
+   écran le dise.
+
+   La technique reste celle de Matt Shumer, sous CC BY 4.0 : la licence
+   autorise l'adaptation et impose de la SIGNALER — c'est fait ici, dans
+   `techniques.js` et dans l'aide, qui disent tous deux la longueur
+   réelle plutôt que celle du skill d'origine. */
+
+export const HARD_LIMIT = 3000;
+export const MOTS_MIN = 230;
+export const MOTS_MAX = 420;
+export const VISEE = { lo: 290, hi: 380 };
+export const LIMITE_DEFAUT = 2500;
+export const LIMITE_MIN = 1700;
 
 export const capLimit = (limit) => {
   const n = Number(limit);
@@ -107,17 +134,17 @@ export function verifyPrompt(text, limit) {
    deux fois : montré au modèle comme cible de style, et passé à son
    propre vérificateur par une assertion — un exemple qui ne passerait
    pas le test qu'il illustre apprendrait la faute au modèle. */
-export const PROMPT_REFERENCE = `Construis une page d'accueil pour une marque de course à pied. Sportive, vert et sombre, énergique, pour un public jeune. Elle doit être interactive et reconnaissable entre mille.
+export const PROMPT_REFERENCE = `Construis une page d'accueil pour une marque de course à pied. Sportive, vert et sombre, énergique, faite pour un public jeune qui achète depuis son téléphone. Elle doit être interactive, reconnaissable entre mille, et donner envie de sortir courir dans les dix secondes qui suivent l'arrivée sur la page.
 
-La barre, c'est la page de campagne running actuelle de Nike. Capture-la en grand écran et en mobile, et compare-toi à ces captures, jamais à une description d'elles.
+La barre, c'est la page de campagne running actuelle de Nike. Va la chercher toi-même : capture-la en grand écran et en mobile, garde ces captures sous la main, et compare-toi à elles, jamais à une description d'elles ni au souvenir que tu en as. Si tu ne peux pas l'ouvrir pour de vrai, dis-le et arrête-toi là plutôt que d'inventer la comparaison. Il y a aussi une moitié qui se mesure : le premier écran doit s'afficher au moins aussi vite que le sien, sur une connexion mobile ordinaire.
 
-Découpe en les plus petits morceaux qu'on peut juger séparément — l'accroche, le mouvement, la typographie, la couleur, les images, le mobile. Sur chacun, lance un constructeur et, à côté, un critique au contexte neuf. Le critique ouvre la vraie page, met notre capture à côté de celle de Nike à l'aveugle, étiquettes retirées, dit laquelle est la meilleure et nomme le seul plus gros manque qui reste. Puis il rend la main au constructeur.
+Découpe le travail en les plus petits morceaux qu'on peut juger séparément — l'accroche, le mouvement, la typographie, la couleur, les images, le passage au mobile. Sur chacun, lance un constructeur et, à côté de lui, un critique séparé au contexte neuf, qui n'a rien vu de la fabrication et n'a donc rien à défendre. Le critique ouvre la vraie page de Nike, met notre écran à côté du sien à l'aveugle, étiquettes retirées, dit lequel est le meilleur et nomme le seul plus gros manque qui reste. Puis il rend la main au constructeur avec ce seul manque, et rien d'autre : une liste de dix remarques se traite comme une liste de tâches, un manque unique se corrige.
 
-Le critique est dur. La louange ne sert à rien. Tant que la nôtre ne gagne pas, il continue.
+Le critique est dur. La louange ne sert à rien, et « c'est déjà très bien » n'est pas un verdict. Tant que la nôtre ne gagne pas la comparaison à l'aveugle, il redemande et le constructeur recommence.
 
-/loop sur chaque morceau jusqu'à ce que le critique choisisse la nôtre à l'aveugle. Ne t'arrête pas avant.
+/loop sur chaque morceau jusqu'à ce que le critique choisisse la nôtre. Ne t'arrête pas avant.
 
-Tiens une page d'avancement vivante que je puisse regarder pendant que ça travaille.
+Tiens une page d'avancement vivante que je puisse regarder pendant que ça travaille : où en est chaque morceau, lequel gagne déjà, quel manque est en cours de correction.
 
 Déploie des sous-agents et ultracode.`;
 
@@ -206,7 +233,7 @@ export function repairInstruction(check, limit, attempt) {
      l'estime — une cible fixe le fait converger par asymptote sans
      jamais franchir la barre. Ici la cible est en MOTS, l'unité dans
      laquelle la faute est commise. */
-  const cibles = [VISEE.hi, 175, 160, 145];
+  const cibles = [VISEE.hi, 350, 320, VISEE.lo + 5];
   const cible = cibles[Math.min(Math.max(attempt - 2, 0), cibles.length - 1)];
   const longueur =
     check.mots > MOTS_MAX || check.over

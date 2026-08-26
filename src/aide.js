@@ -14,6 +14,14 @@
       ce que l'atelier ÉCRIT ; ils sont expliqués ici, jamais supposés.
    ================================================================ */
 
+import { VISEE } from "./gauntlet.js";
+
+/* La longueur annoncée du prompt de gantelet vient de la fenêtre visée,
+   jamais d'un chiffre écrit à la main : « environ 170 mots » est resté
+   vrai jusqu'au 2026-08-26 et faux le lendemain, alors que le seul
+   endroit qui décide de la longueur avait changé (`gauntlet.js`). */
+const MOTS_TYPE = Math.round((VISEE.lo + VISEE.hi) / 2);
+
 /* Les huit sections du prompt produit. Les titres doivent correspondre
    EXACTEMENT à ceux qu'impose `buildMeta()` — une assertion le vérifie,
    sans quoi l'aide promettrait une structure que l'atelier ne produit
@@ -73,10 +81,10 @@ const RAW_CHAPITRES = [
     sert: "Choisir, avant d'écrire, laquelle des deux méthodes correspond à ce que tu confies.",
     points: [
       "La méthode Boris écrit un mandat long — huit sections — pour un agent qui fait tourner quelque chose et découvre son travail là où ça casse. C'est ce qu'il te faut pour une application, un service, un algorithme : un périmètre à couvrir.",
-      "La boucle du gantelet écrit un mandat court — environ 170 mots — pour un agent qui vise une chose qui existe déjà et recommence jusqu'à faire mieux qu'elle. C'est ce qu'il te faut quand tu vises une qualité et non un périmètre : une page, un texte, un outil, une analyse.",
+      `La boucle du gantelet écrit un mandat d'un seul tenant — environ ${MOTS_TYPE} mots, sans la moindre section — pour un agent qui vise une chose qui existe déjà et recommence jusqu'à faire mieux qu'elle. C'est ce qu'il te faut quand tu vises une qualité et non un périmètre : une page, un texte, un outil, une analyse.`,
       "La différence tient à un mot : où est la preuve. Chez Boris elle est DANS le mandat — des contrôles que l'agent se donne. Au gantelet elle est DEHORS — une chose réelle, déjà bonne, que l'agent doit aller chercher et battre.",
       "Le choix se fait au-dessus de ton idée, avant de lancer. Il se verrouille dès qu'un prompt est à l'écran : changer de technique sous un prompt déjà écrit reviendrait à le juger avec les règles de l'autre. « Nouveau prompt » rouvre le choix.",
-      "La boucle du gantelet est une technique de Matt Shumer, empaquetée en skill par RoboNuggets et reprise ici en français, sous licence CC BY 4.0. Elle n'est pas de nous, et elle est citée partout où elle est utilisée.",
+      "La boucle du gantelet est une technique de Matt Shumer, empaquetée en skill par RoboNuggets et reprise ici en français, sous licence CC BY 4.0. Elle n'est pas de nous, et elle est citée partout où elle est utilisée. Une seule chose a été changée par rapport au skill d'origine, et la licence demande de le dire : le mandat produit est plus long que les 120 à 180 mots qu'il prescrit.",
     ],
   },
   {
@@ -193,7 +201,7 @@ const RAW_CHAPITRES = [
     sert: "La structure du prompt produit par la boucle du gantelet, et à quoi sert chaque mouvement.",
     points: [
       "Un prompt du gantelet tient en sept mouvements, en phrases pleines, sans titre ni puce. S'il avait besoin d'un titre pour rester lisible, c'est qu'il serait trop long.",
-      "Il est court exprès — autour de 170 mots. Toute sa force tient dans la référence à battre : le reste n'est que l'échafaudage qui oblige à s'y comparer pour de vrai.",
+      `Il vise autour de ${MOTS_TYPE} mots : assez pour poser les sept mouvements en entier, pas assez pour devenir une liste de tâches. Toute sa force tient dans la référence à battre — le reste n'est que l'échafaudage qui oblige à s'y comparer pour de vrai.`,
       "Rien d'autre n'y entre : ni architecture, ni découpage, ni technologie, ni nombre de tours. Chaque instruction en trop est une décision retirée à l'agent, et il décide mieux une fois le travail commencé.",
       "Les deux dernières lignes parlent à Claude Code : « /loop » relance tant que tu n'arrêtes pas, « ultracode » autorise le travail à plusieurs agents en parallèle. Avec un autre agent, elles se remplacent par la même consigne en français.",
     ],

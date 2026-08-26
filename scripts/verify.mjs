@@ -308,7 +308,15 @@ section("Les deux techniques");
   const bon = gaunt.PROMPT_REFERENCE;
   const vu = G.verifyPrompt(bon, G.limiteDefaut);
   assert("l'exemple de référence passe son propre vérificateur", vu.pass, vu.fails.join(" ; "));
-  assert("et il est dans la fenêtre visée", vu.mots >= 140 && vu.mots <= 190, `${vu.mots} mots`);
+  /* La fenêtre vient de la technique, pas d'un chiffre recopié : écrite
+     à la main, l'assertion a survécu au changement de fenêtre du
+     2026-08-26 en vérifiant l'ancienne. */
+  const fen = G.fenetre();
+  assert(
+    "et il est dans la fenêtre visée",
+    vu.mots >= fen.lo && vu.mots <= fen.hi,
+    `${vu.mots} mots pour ${fen.lo}–${fen.hi}`
+  );
 
   /* Chaque faute mortelle nommée par la technique est une assertion, pas
      un conseil. On les provoque une par une sur un texte par ailleurs
@@ -362,10 +370,17 @@ section("Les deux techniques");
 
   /* Le choix de la meilleure tentative. Celui de Boris rend la plus
      COURTE ; ici la plus courte peut être la plus mutilée. */
+  /* Les trois tentatives se DÉDUISENT de la fenêtre. Écrites en dur avec
+     60/240/200, elles ont continué de passer après le 2026-08-26 en
+     mesurant la fenêtre d'avant : l'assertion restait verte pour une
+     règle que le code n'appliquait plus. */
+  const milieu = (gaunt.VISEE.lo + gaunt.VISEE.hi) / 2;
+  const faute = (m) =>
+    `longueur : ${m} mots — ${m < milieu ? "trop court" : "trop long"} (vise ${gaunt.VISEE.lo} à ${gaunt.VISEE.hi})`;
   const tries = [
-    { text: "a", check: { pass: false, fails: ["longueur : 60 mots — trop court (vise 140 à 190)"], mots: 60 } },
-    { text: "b", check: { pass: false, fails: ["longueur : 240 mots — trop long (vise 140 à 190)"], mots: 240 } },
-    { text: "c", check: { pass: false, fails: ["longueur : 200 mots — trop long (vise 140 à 190)"], mots: 200 } },
+    { text: "a", check: { pass: false, fails: [faute(gaunt.MOTS_MIN - 50)], mots: gaunt.MOTS_MIN - 50 } },
+    { text: "b", check: { pass: false, fails: [faute(gaunt.MOTS_MAX + 40)], mots: gaunt.MOTS_MAX + 40 } },
+    { text: "c", check: { pass: false, fails: [faute(gaunt.MOTS_MAX - 20)], mots: gaunt.MOTS_MAX - 20 } },
   ];
   assert(
     "la meilleure tentative est la plus proche de la fenêtre, pas la plus courte",
@@ -397,7 +412,7 @@ section("Les deux techniques");
   /* La technique suit l'entrée de bibliothèque, sinon rouvrir un prompt
      de gantelet le ferait mesurer contre huit sections absentes. */
   const lib = await import("../src/library.js");
-  const eG = lib.makeEntry({ idea: "une page", prompt: bon, limit: 1300, version: 1, technique: "gauntlet" });
+  const eG = lib.makeEntry({ idea: "une page", prompt: bon, limit: G.limiteDefaut, version: 1, technique: "gauntlet" });
   assert("une entrée garde sa technique", eG.technique === "gauntlet", eG.technique);
   const eVieille = lib.makeEntry({ idea: "x", prompt: "y", limit: 3900, version: 1 });
   assert("une entrée sans technique est de Boris", eVieille.technique === "boris", eVieille.technique);
@@ -1362,7 +1377,7 @@ const SURFACES = [
     action: `<script>
       localStorage.setItem("atelier-boris:reglages", JSON.stringify({
         writer: "claude-sonnet-5", judge: "claude-opus-5",
-        technique: "gauntlet", charLimit: 3900, charLimitGauntlet: 1300
+        technique: "gauntlet", charLimit: 3900, charLimitGauntlet: 2500
       }));
     </script>`,
     check(dom) {
@@ -1380,7 +1395,7 @@ const SURFACES = [
       assert("le bandeau est celui du gantelet", dom.includes("But — Barre — Critique — Victoire"));
       assert("l'accroche aussi", dom.includes("des références réelles à battre"));
       assert("et l'exemple du champ vide", dom.includes("aussi bonne que celle de Stripe"));
-      assert("la limite affichée est la sienne", /limite 1300 car\./.test(dom));
+      assert("la limite affichée est la sienne", /limite 2500 car\./.test(dom));
     },
   },
   /* QUATRIÈME surface, et la seule à ouvrir une VRAIE grande fenêtre.
@@ -1694,10 +1709,13 @@ if (!ANTHROPIC) {
       runG.check.pass,
       `${runG.check.mots} mots — ${runG.check.fails.join(" ; ") || "au vert"}`
     );
+    /* Bornes lues dans la technique : recopiées, elles ont survécu au
+       changement de fenêtre du 2026-08-26 en vérifiant l'ancienne. */
+    const bornes = await import("../src/gauntlet.js");
     assert(
       "il tient dans la fenêtre de mots",
-      runG.check.mots >= 110 && runG.check.mots <= 210,
-      `${runG.check.mots} mots`
+      runG.check.mots >= bornes.MOTS_MIN && runG.check.mots <= bornes.MOTS_MAX,
+      `${runG.check.mots} mots pour ${bornes.MOTS_MIN}–${bornes.MOTS_MAX}`
     );
     assert("il nomme la barre demandée", /stripe/i.test(runG.text), runG.text.slice(0, 120));
     assert(

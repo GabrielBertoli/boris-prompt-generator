@@ -65,9 +65,18 @@ Tous les parcours passent en preview, assertions au vert bundle et mail compris 
   enregistrée sur l'entrée de bibliothèque (sinon un prompt rouvert est
   mesuré contre la méthode de l'autre). L'attribution CC BY vit dans
   `src/gauntlet.js` et dans l'aide, tenue par une assertion.
+- **Le gantelet écrit autour de 2500 caractères depuis le 2026-08-26**
+  (`DECISIONS.md` § 29), et la leçon tient en une phrase : **sa longueur se
+  règle en MOTS, jamais en caractères seuls**. Monter le plafond sans monter la
+  fenêtre de mots donne un curseur qui monte, un prompt qui ne change pas, et un
+  vérificateur qui refuse en silence tout prompt vraiment plus long. Visée
+  290–380 mots, fourchette 230–420, défaut 2500, plafond dur 3000, plancher
+  1700 — tout dans `src/gauntlet.js`, et nulle part ailleurs. Un chiffre de
+  longueur recopié à l'écran ou dans une assertion est une bombe à retardement
+  VERTE : sept l'ont été, tous supprimés ce jour-là.
 - **Deux instruments de vérification**, et le skill `/verify` du dépôt
   (`.claude/skills/verify/SKILL.md`) dit lequel prouve quoi :
-  1. `npm run verify` — **271 assertions en local** au 2026-08-23 (112 au
+  1. `npm run verify` — **290 assertions en local** au 2026-08-26 (112 au
      2026-08-02), au vert
      (les parcours d'accès s'y ajoutent quand `BASE_URL` est fourni : 122
      sur la production le 2026-08-01). Rien ne se déclare sans l'avoir

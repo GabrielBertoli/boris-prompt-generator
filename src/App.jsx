@@ -66,7 +66,7 @@ const DEFAULTS = {
      de l'autre — et le réglage hérité est indistinguable, à l'écran, du
      réglage choisi. */
   charLimit: 3900,
-  charLimitGauntlet: 1300,
+  charLimitGauntlet: 2500,
 };
 
 function loadSettings() {
@@ -90,9 +90,17 @@ function loadSettings() {
       charLimit: Number.isFinite(stored)
         ? techniqueOf("boris").capLimit(stored)
         : DEFAULTS.charLimit,
-      charLimitGauntlet: Number.isFinite(parsed.charLimitGauntlet)
-        ? gauntlet.capLimit(parsed.charLimitGauntlet)
-        : DEFAULTS.charLimitGauntlet,
+      /* Même migration que ci-dessus, et pour la même raison : un réglage
+         de gantelet enregistré avant le 2026-08-26 vaut 1300 ou moins, or
+         le plancher est passé à 1700. `capLimit` le remonterait au
+         PLANCHER — un réglage que personne n'a choisi, trop serré pour la
+         fenêtre de mots actuelle. Sous le plancher, la valeur ne peut plus
+         être un choix : on rend le défaut. */
+      charLimitGauntlet:
+        Number.isFinite(parsed.charLimitGauntlet) &&
+        parsed.charLimitGauntlet >= gauntlet.limiteMin
+          ? gauntlet.capLimit(parsed.charLimitGauntlet)
+          : DEFAULTS.charLimitGauntlet,
     };
   } catch {
     return DEFAULTS;

@@ -145,9 +145,12 @@ const GAUNTLET = {
   nom: "Boucle du gantelet",
   court: "Gantelet",
   resume: "Le mandat d'un agent qui vise une référence réelle et recommence jusqu'à la battre.",
-  quand: "Tu vises une qualité, pas un périmètre : une page, un texte, un outil, une analyse. Prompt court, l'oracle est DEHORS — une chose qui existe déjà et qui est indiscutablement bonne.",
+  quand: "Tu vises une qualité, pas un périmètre : une page, un texte, un outil, une analyse. Prompt d'un seul tenant, sans section, l'oracle est DEHORS — une chose qui existe déjà et qui est indiscutablement bonne.",
   unite: "car.",
-  sortie: "un prompt court, autour de 170 mots",
+  /* La longueur annoncée se DÉDUIT de la fenêtre : écrite à la main,
+     elle a menti dès le 2026-08-26, où la visée est passée de 170 à
+     335 mots sans que cette ligne bouge. */
+  sortie: `un prompt d'un seul tenant, autour de ${Math.round((gauntlet.VISEE.lo + gauntlet.VISEE.hi) / 2)} mots`,
   cleReglage: "charLimitGauntlet",
   credit: "Technique de Matt Shumer, empaquetée en skill par RoboNuggets (CC BY 4.0).",
 

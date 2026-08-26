@@ -683,6 +683,71 @@ et il reste à installer.
 
 ---
 
+## 29. Le gantelet passe à 2500 caractères — et pourquoi le plafond seul n'aurait rien fait
+
+Demandé par Gabriel le 2026-08-26 : « que le générateur de prompt ne soit plus
+limité à 1300 caractères mais plutôt à 2500 ». Il s'agit bien de la **boucle du
+gantelet**, pas de la méthode Boris, qui est à 3900 depuis § 19.
+
+**Le piège, et c'est tout l'arbitrage : la longueur du gantelet ne se décide pas
+en caractères.** La technique compte en MOTS — c'est sa règle, § 27 — et le
+plafond en caractères n'est là que parce que c'est ce que toute la plomberie de
+l'atelier mesure et enregistre. Monter le seul réglage à 2500 aurait donné
+exactement ceci : le curseur affiche 2500, le méta-prompt continue de demander
+« 140 à 190 mots », le modèle continue de rendre ~1 100 caractères, et si par
+accident il en rendait 2500, `verifyPrompt` le REFUSERAIT pour excès de mots et
+le ferait réécrire plus court. Un curseur qui monte sans effet visible, avec un
+vérificateur qui ramène en silence : la panne la plus chère à diagnostiquer,
+parce que rien n'est en rouge.
+
+**Les deux comptes montent donc ensemble, du même facteur (×1,92).** Visée
+140–190 → **290–380 mots**, fourchette acceptée 110–210 → **230–420**, réglage
+par défaut 1300 → **2500**, plafond dur 1600 → **3000** (sous les 3950 de Boris :
+les deux techniques restent d'ordres de grandeur différents). Le rapport mesuré
+sur l'exemple de référence est de **5,7 caractères par mot** dans ce français-là,
+ce qui met le haut de la visée à ~2 170 caractères et le haut de la fourchette à
+~2 400 : **c'est la fourchette de mots qui mord en premier, jamais le plafond**,
+exactement comme avant.
+
+**`LIMITE_MIN` monte aussi, 800 → 1700, et ce n'est pas de l'hygiène.** Sous
+1700 caractères, le BAS de la fenêtre de mots (290 mots ≈ 1 650 car.) ne tient
+plus : le curseur proposerait un réglage où chaque génération échouerait sur la
+longueur, sans qu'aucun écran ne le dise. Conséquence sur les réglages
+enregistrés : une valeur d'avant vaut 1300, donc **sous le nouveau plancher**, et
+`capLimit` la remonterait au PLANCHER (1700) — un réglage que personne n'a
+choisi et trop serré pour la fenêtre. `loadSettings` traite donc une valeur sous
+le plancher comme « écrite par une version antérieure » et rend le défaut, même
+migration que celle du 3000 → 3900 de Boris.
+
+**L'exemple de référence a été réécrit, il le devait.** Il est passé à son
+propre vérificateur par une assertion (§ 27) : laissé à 186 mots, il aurait
+échoué au premier `npm run verify` — et surtout, montré au modèle comme cible de
+forme et de densité, il lui aurait appris la longueur qu'on venait d'abandonner.
+Il fait 347 mots pour 1 973 caractères, mêmes sept mouvements, rien de gonflé :
+ce qui a été ajouté est du contenu que la version courte laissait implicite
+(aller chercher la vraie page soi-même, la moitié mesurable, pourquoi le critique
+ne rend qu'UN manque).
+
+**Quatre chiffres écrits à la main ont été supprimés au passage, et c'est la
+leçon récurrente de ce dépôt.** « environ 170 mots » dans l'aide (deux fois),
+« un prompt court, autour de 170 mots » dans `techniques.js`, la fenêtre
+`140 && 190` de l'assertion sur l'exemple, les bornes `110 && 210` de
+l'assertion sur le prompt réellement généré, et les trois tentatives factices
+du choix de la meilleure. Tous auraient survécu au changement **en vert**, en
+mesurant la fenêtre d'avant : une assertion verte pour une règle que le code
+n'applique plus est pire qu'une assertion absente. Ils se déduisent désormais de
+`gauntlet.VISEE` / `MOTS_MIN` / `MOTS_MAX`, source unique.
+
+**La licence.** CC BY 4.0 autorise l'adaptation et impose de la SIGNALER : le
+skill de Matt Shumer prescrit 120 à 180 mots, l'atelier n'en produit plus autant.
+C'est écrit dans `gauntlet.js` et, surtout, dans l'aide que l'utilisateur lit.
+
+**Vérifié :** `npm run verify` — **290 assertions au vert**, appel Anthropic réel
+compris. Le générateur a rendu un prompt de gantelet de **369 mots / 2 128
+caractères du premier coup**, oracle au vert, sans réparation.
+
+---
+
 ## Reste à la main de Gabriel
 
 - Vérifier un domaine d'envoi chez Resend, pour que le lien de
