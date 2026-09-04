@@ -249,7 +249,7 @@ section("Plafond de longueur");
   );
 }
 
-/* ---------- 1 bis 2 ter. les deux techniques ----------
+/* ---------- 1 bis 2 ter. les trois techniques ----------
 
    L'atelier produit maintenant deux objets différents. Ce qui se vérifie
    ici n'est pas « le gantelet marche » mais la seule chose qui puisse
@@ -258,17 +258,18 @@ section("Plafond de longueur");
    170 mots dit « à refaire » sans que rien soit à refaire — et personne
    ne va relire le code pour un verdict qui a l'air d'un avis. */
 
-section("Les deux techniques");
+section("Les trois techniques");
 
 {
   const { DEFAULT_TECHNIQUE, TECHNIQUES, estTechnique, techniqueOf } = await import("../src/techniques.js");
   const gaunt = await import("../src/gauntlet.js");
+  const croch = await import("../src/crochets.js");
 
-  assert("il y a deux techniques", TECHNIQUES.length === 2, TECHNIQUES.map((t) => t.id).join(", "));
+  assert("il y a trois techniques", TECHNIQUES.length === 3, TECHNIQUES.map((t) => t.id).join(", "));
   assert("Boris reste celle par défaut", DEFAULT_TECHNIQUE === "boris", DEFAULT_TECHNIQUE);
   assert("un identifiant inconnu retombe sur Boris", techniqueOf("inventée").id === "boris");
   assert("un identifiant absent aussi", techniqueOf(undefined).id === "boris");
-  assert("estTechnique refuse ce qui n'en est pas une", !estTechnique("inventée") && estTechnique("gauntlet"));
+  assert("estTechnique refuse ce qui n'en est pas une", !estTechnique("inventée") && estTechnique("gauntlet") && estTechnique("hooks"));
 
   /* LE contrat. Un champ manquant ne se voit pas au chargement : il se
      voit à la génération, une fois l'appel payé. */
@@ -292,14 +293,17 @@ section("Les deux techniques");
      suivre à l'une le réglage choisi pour l'autre, sans rien à l'écran. */
   assert(
     "chacune a sa propre case de réglage",
-    new Set(TECHNIQUES.map((t) => t.cleReglage)).size === 2,
+    new Set(TECHNIQUES.map((t) => t.cleReglage)).size === TECHNIQUES.length,
     TECHNIQUES.map((t) => t.cleReglage).join(", ")
   );
+  /* Deux à deux, pas seulement Boris contre gantelet : une troisième
+     grille qui partagerait une clé avec l'une des deux aurait le même
+     défaut, et l'assertion à deux termes l'aurait laissé passer. */
+  const toutesCles = TECHNIQUES.flatMap((t) => t.CRITERES.map((c) => c.cle));
   assert(
     "et les grilles du juge n'ont aucune clé commune",
-    !techniqueOf("boris").CRITERES.some((c) =>
-      techniqueOf("gauntlet").CRITERES.some((g) => g.cle === c.cle)
-    )
+    new Set(toutesCles).size === toutesCles.length,
+    toutesCles.filter((k, i) => toutesCles.indexOf(k) !== i).join(", ") || "toutes distinctes"
   );
 
   /* ---- l'oracle du gantelet ---- */
@@ -420,6 +424,86 @@ section("Les deux techniques");
   assert("et elle survit à l'export/import", imported.technique === "gauntlet", imported.technique);
   const bidon = lib.parseBundle(JSON.stringify([{ ...eG, technique: "inventée" }])).items[0];
   assert("une technique inventée dans un import retombe sur Boris", bidon.technique === "boris");
+}
+
+/* ---------- 1 bis 2 quater. l'oracle de la pile de crochets ----------
+   Même discipline que pour le gantelet : l'exemple de référence passe,
+   chaque faute mortelle nommée par la technique est provoquée une par
+   une, et les trois oracles sont prouvés NON interchangeables. */
+
+section("L'oracle de la pile de crochets");
+
+{
+  const { techniqueOf } = await import("../src/techniques.js");
+  const croch = await import("../src/crochets.js");
+  const H = techniqueOf("hooks");
+  const bon = croch.PROMPT_REFERENCE;
+  const vu = H.verifyPrompt(bon, H.limiteDefaut);
+  assert("l'exemple de référence passe son propre vérificateur", vu.pass, vu.fails.join(" ; "));
+  const fen = H.fenetre(H.limiteDefaut);
+  assert("et il est dans la fenêtre visée", vu.count >= fen.lo && vu.count <= fen.hi, `${vu.count} car. pour ${fen.lo}–${fen.hi}`);
+  assert(
+    "le méta-prompt impose les cinq titres, dans l'ordre",
+    (() => { const m = H.buildMeta(H.limiteDefaut); const r = croch.SECTIONS.map((t) => m.indexOf(t)); return r.every((x, i) => x >= 0 && (i === 0 || x > r[i - 1])); })()
+  );
+  assert("la dernière ligne n'est pas celle de Boris", croch.DERNIERE_LIGNE !== "Sinon tu continues.");
+
+  const l1 = "1. sur * — après : journalise l'événement, son origine et son résultat dans JOURNAL.md, refus compris.";
+  const l2 = "2. sur git.push — avant : build et vérificateur au vert, sinon refuse et nomme l'assertion rouge.";
+  const casse = [
+    ["rien de retiré", bon.replace(/^- .*\n?/gm, ""), "retiré"],
+    ["le crochet sur * absent", bon.replace("1. sur * — après", "1. sur tool.call — après"), "sur *"],
+    ["le crochet sur session.stop absent", bon.replace("sur session.stop", "sur session.fin"), "session.stop"],
+    ["un placement hors vocabulaire", bon.replace("— avant : build", "— toujours : build"), "illisible"],
+    ["le crochet sur * qui n'est pas le premier", bon.replace(l1 + "\n" + l2, l2.replace("2.", "1.") + "\n" + l1.replace("1.", "2.")), "premier"],
+    ["la dernière ligne de Boris à la place de la sienne", bon.replace(croch.DERNIERE_LIGNE, "Sinon tu continues."), "finit"],
+    ["l'ordre non posé", bon.replace("enveloppe", "domine"), "enveloppe"],
+    ["aucun crochet « à la place »", bon.replace(/— à la place :/g, "— avant :"), "à la place"],
+    ["une section absente", bon.replace("# LE FOND\n", ""), "sections absentes"],
+  ];
+  for (const [nom, texte, attendu] of casse) {
+    const v = H.verifyPrompt(texte, H.limiteDefaut);
+    assert(`refusé : ${nom}`, !v.pass, "accepté à tort");
+    assert(
+      `et la raison le nomme (${attendu})`,
+      v.fails.some((f) => f.toLowerCase().includes(attendu.toLowerCase())),
+      v.fails.join(" ; ")
+    );
+  }
+  assert("neuf crochets sont trop", !H.verifyPrompt(bon.replace("6. sur session.stop", "6. sur fs.read — après : rien.\n7. sur fs.read — après : rien.\n8. sur fs.read — après : rien.\n9. sur session.stop"), H.limiteDefaut).pass);
+
+  /* Ce qu'un modèle rend et qu'un vérificateur bête refuserait à tort. */
+  assert("un trait d'union entouré d'espaces vaut un tiret", H.verifyPrompt(bon.replace(/—/g, "-"), H.limiteDefaut).pass);
+  assert("un demi-cadratin aussi", H.verifyPrompt(bon.replace(/—/g, "–"), H.limiteDefaut).pass);
+  assert("une apostrophe typographique ne fait pas échouer", H.verifyPrompt(bon.replace(/'/g, "’"), H.limiteDefaut).pass);
+
+  const long = H.verifyPrompt(bon + " " + "mot ".repeat(600), H.limiteDefaut);
+  assert("un prompt qui déborde le plafond est marqué hors limite", long.over === true);
+  assert("et la faute commence par « longueur »", long.fails.some((f) => f.startsWith("longueur")));
+  assert("le plafond dur est celui de l'atelier", H.hardLimit === (await import("../src/meta.js")).HARD_LIMIT);
+
+  const B = techniqueOf("boris");
+  const G = techniqueOf("gauntlet");
+  /* L'oracle de Boris ACCEPTE un prompt de crochets — il ne teste que la
+     première section et « # SORTIE », et laisse le reste à son juge. C'est
+     précisément pourquoi la technique doit suivre l'entrée de bibliothèque :
+     rouvert sous Boris, un prompt de crochets serait jugé contre huit
+     sections qu'il n'a pas, sans qu'aucune pastille rouge ne le dise. */
+  assert("l'oracle de Boris laisse passer un prompt de crochets — la technique DOIT suivre l'entrée", B.verifyPrompt(bon, 3900).pass);
+  assert("celui du gantelet le rejette", !G.verifyPrompt(bon, G.limiteDefaut).pass);
+  assert("et celui des crochets rejetterait un prompt de Boris", !H.verifyPrompt((await import("../src/meta.js")).PROMPT_REFERENCE, H.limiteDefaut).pass);
+  assert("et un prompt de gantelet", !H.verifyPrompt((await import("../src/gauntlet.js")).PROMPT_REFERENCE, H.limiteDefaut).pass);
+
+  /* La réparation nomme CINQ sections et la forme des crochets : celle
+     de Boris, laissée par défaut, aurait demandé huit sections. */
+  const rep = H.repairInstruction({ count: 3500, fails: ["x"], over: true }, H.limiteDefaut, 2);
+  assert("la réparation parle de cinq sections", /cinq sections/.test(rep) && !/huit sections/.test(rep));
+  assert("et nomme le vocabulaire des placements", croch.PLACEMENTS.every(([p]) => rep.includes(p)));
+
+  const lib = await import("../src/library.js");
+  const eH = lib.makeEntry({ idea: "un agent", prompt: bon, limit: H.limiteDefaut, version: 1, technique: "hooks" });
+  assert("une entrée de bibliothèque garde la technique", eH.technique === "hooks");
+  assert("et survit à l'export/import", lib.parseBundle(JSON.stringify([{ ...eH }])).items[0].technique === "hooks");
 }
 
 /* ---------- 1 bis 3. la note du juge ----------
@@ -549,11 +633,11 @@ section("La note du juge");
 section("L'aide");
 
 {
-  const { CHAPITRES, MOUVEMENTS_GANTELET, PIED, SECTIONS_BORIS } = await import("../src/aide.js");
+  const { CHAPITRES, MOUVEMENTS_GANTELET, PIED, SECTIONS_BORIS, SECTIONS_CROCHETS } = await import("../src/aide.js");
   const { buildMeta, HARD_LIMIT } = await import("../src/meta.js");
 
-  const NB_CHAPITRES = 14;
-  assert("l'aide a quatorze chapitres", CHAPITRES.length === NB_CHAPITRES, `${CHAPITRES.length}`);
+  const NB_CHAPITRES = 15;
+  assert("l'aide a quinze chapitres", CHAPITRES.length === NB_CHAPITRES, `${CHAPITRES.length}`);
   assert("chacun porte un numéro unique", new Set(CHAPITRES.map((c) => c.num)).size === NB_CHAPITRES);
   assert("chacun porte une clé unique", new Set(CHAPITRES.map((c) => c.cle)).size === NB_CHAPITRES);
   /* Le numéro se déduit du rang : c'est ce qui permet d'insérer un
@@ -576,7 +660,7 @@ section("L'aide");
 
   /* Toutes les parties de l'écran sont couvertes. Sans cette liste, on
      ajoute un panneau et l'aide vieillit en silence. */
-  for (const cle of ["porte", "idee", "techniques", "questions", "marbre", "epreuve", "note", "fil", "casse", "reglages", "cout", "methode", "gantelet", "securite"]) {
+  for (const cle of ["porte", "idee", "techniques", "questions", "marbre", "epreuve", "note", "fil", "casse", "reglages", "cout", "methode", "gantelet", "crochets", "securite"]) {
     assert(`le chapitre « ${cle} » est là`, CHAPITRES.some((c) => c.cle === cle));
   }
 
@@ -624,6 +708,25 @@ section("L'aide");
     const attribution = CHAPITRES.find((c) => c.cle === "techniques").points.join(" ");
     assert("l'aide attribue la technique à son auteur", /Matt Shumer/.test(attribution));
     assert("et nomme la licence", /CC BY/.test(attribution));
+    /* La pile de crochets n'est pas sous licence, mais elle est
+       transposée d'une proposition publique : la source se cite. */
+    assert("l'aide cite la source des crochets", /Function Hooks/.test(attribution) && /91870/.test(attribution));
+  }
+
+  /* Le chapitre des crochets annonce cinq sections, et ce sont celles
+     que la technique impose — lues dans `crochets.js`, pas recopiées. */
+  {
+    const croch = await import("../src/crochets.js");
+    assert("l'aide annonce cinq sections de crochets", SECTIONS_CROCHETS.length === 5, `${SECTIONS_CROCHETS.length}`);
+    assert(
+      "ce sont exactement celles de la technique, dans l'ordre",
+      SECTIONS_CROCHETS.every(([titre], i) => titre === croch.SECTIONS[i])
+    );
+    assert(
+      "chaque section est traduite en français courant",
+      SECTIONS_CROCHETS.every(([, quoi]) => quoi && quoi.length > 40)
+    );
+    assert("et la dernière ligne annoncée est la vraie", SECTIONS_CROCHETS[4][1].includes(croch.DERNIERE_LIGNE));
   }
 
   /* Le chapitre « méthode » cite le plafond réel : un chiffre écrit à la
@@ -1382,7 +1485,7 @@ const SURFACES = [
     </script>`,
     check(dom) {
       const tuiles = (dom.match(/class="technique(?: technique-active)?"/g) || []).length;
-      assert("les deux techniques sont proposées", tuiles === 2, `${tuiles} tuile(s)`);
+      assert("les trois techniques sont proposées", tuiles === 3, `${tuiles} tuile(s)`);
       const active = /class="technique technique-active"[\s\S]{0,400}?technique-nom">([^<]*)</.exec(dom);
       assert(
         "celle qui est armée est celle qui est marquée",
@@ -1724,6 +1827,45 @@ if (!ANTHROPIC) {
       runG.text.trim().split("\n").filter(Boolean).pop()
     );
     assert("il ne contient ni titre ni puce", !/^[ \t]*(#{1,6}\s|[-*•]\s)/m.test(runG.text));
+  }
+
+  /* ---- la même boucle, pour la troisième technique ----
+     Un oracle qui exige une forme de ligne exacte (« N. sur x.y — placement : … »)
+     est précisément le genre qui peut être intenable pour un modèle réel
+     sans qu'un texte écrit à la main le montre. */
+  const H = techniqueOf("hooks");
+  const limitH = H.limiteDefaut;
+  const runH = await runVerifiedGeneration({
+    ask: async (convo) => {
+      const { text } = await callClaude(convo, { apiKey: ANTHROPIC, model: "claude-sonnet-5", maxTokens: 2200 });
+      return text;
+    },
+    baseConvo: H.baseConvoFor({
+      idea: "un agent qui tient la boîte support d'une boutique en ligne Shopify : il répond aux clients, prépare les avoirs, mais ne rembourse jamais lui-même",
+      limit: limitH,
+    }),
+    instruction: H.etape2Instruction({ limit: limitH }),
+    limit: limitH,
+    verify: H.verifyPrompt,
+    repair: H.repairInstruction,
+    onLog: (line) => console.log(`   · [crochets] ${line}`),
+  }).catch((error) => {
+    assert("la pile de crochets obtient une réponse", false, error.message);
+    return null;
+  });
+
+  if (runH) {
+    assert(
+      `le prompt de crochets passe son oracle en ${MAX_TENTATIVES} tentatives au plus`,
+      runH.check.pass,
+      `${runH.check.count} car., ${runH.check.crochets} crochet(s) — ${runH.check.fails.join(" ; ") || "au vert"}`
+    );
+    const croch = await import("../src/crochets.js");
+    const { crochets } = croch.lireCrochets(runH.text);
+    assert("le premier crochet est sur *", crochets[0]?.evenement === "*", crochets[0]?.evenement);
+    assert("un crochet retient session.stop", crochets.some((c) => c.evenement === "session.stop"));
+    assert("le remboursement est retiré ou refusé", /rembours/i.test(runH.text), runH.text.slice(0, 200));
+    assert(`il finit par « ${croch.DERNIERE_LIGNE} »`, runH.text.trim().endsWith(croch.DERNIERE_LIGNE));
   }
 }
 

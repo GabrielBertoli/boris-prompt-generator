@@ -24,6 +24,32 @@ palier à 1800 px, mais il mesure des hauteurs — il ne clique pas.
 Déploiement précédent : 2026-08-02, commit `e87cbf3`, 228 au harnais + 142 au
 pilotage.
 
+## 2026-09-04 — troisième technique : la pile de crochets
+
+Demande de Gabriel : une technique inspirée des **Function Hooks** de Claude
+Code (proposition Anthropic du 2026-09-03, non livrée, `anthropics/claude-code#91870`).
+Arbitrage complet dans **DECISIONS § 30**. En deux phrases : un mandat de GARDE
+en cinq sections où ce que l'agent ne doit jamais faire est **retiré de son
+monde** plutôt qu'interdit en prose, et où chaque règle est un crochet accroché
+à un geste nommé, du plus haut au plus bas — le premier enveloppe les autres.
+
+**Ce qui a bougé :** `src/crochets.js` (nouveau — mesure, oracle, méta-prompt,
+étapes, juge, exemple de référence), `src/techniques.js` (troisième entrée du
+registre, `id: "hooks"`), `src/App.jsx` (case de réglage `charLimitHooks`,
+défaut 3000, et la phrase sous le curseur), `src/aide.js` (chapitre
+« Pile de crochets — les cinq sections », « Les trois techniques », source
+citée), `scripts/verify.mjs` (section « L'oracle de la pile de crochets »,
+appel réel, quinze chapitres, trois tuiles).
+
+**Vérifié :** `npm run build` au vert, `npm run verify` **341 assertions au
+vert**, dont deux appels réels — Sonnet 5 rend un prompt de crochets au vert
+en deux tentatives puis du premier coup. **Déployé en preview, pas en
+production** : la promotion reste à la main de Gabriel.
+
+**Atelier-Cartes** (demande du même jour) : oracle Python `verifier.py
+crochets` (33 cas), fiche `techniques/crochets.md`, carte de la tour mise à
+jour par l'API (voie 0 : BORIS, GANTELET ou CROCHETS ; ligne 3 923/3990).
+
 ## 2026-08-26 — le gantelet écrit désormais autour de 2500 caractères
 
 Demande de Gabriel : le générateur ne doit plus être limité à 1300 caractères

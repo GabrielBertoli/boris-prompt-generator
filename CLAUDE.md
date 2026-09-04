@@ -20,7 +20,7 @@ Rejoue en preview réelle, vraie clé de test, vraie boîte mail de test : prén
 - **Le dépôt non plus** : aucun code d'accès en clair dans un fichier suivi par git, documentation comprise. Le dépôt est public, et un code lisible ouvre une session — qui reçoit la clé Anthropic commune. Mesuré le 2026-08-02 : les cinq codes y étaient depuis le premier commit ; réémis, purgés, et `npm run verify` échoue désormais si un code réapparaît dans un fichier suivi.
 - Les secrets serveur vivent en variables Vercel, jamais en VITE_*, jamais commités.
 - La clé API du visiteur reste dans son navigateur ; ses appels partent en direct.
-- L'atelier embarque DEUX techniques, et une seule règle : chacune expose le même contrat, aucune ne s'écrit dans l'écran. Méthode Boris (huit sections) et boucle du gantelet (sept mouvements, une barre réelle à battre). Le dépôt est la source de vérité. Serverless minimal : l'accès, rien d'autre.
+- L'atelier embarque TROIS techniques, et une seule règle : chacune expose le même contrat, aucune ne s'écrit dans l'écran. Méthode Boris (huit sections), boucle du gantelet (sept mouvements, une barre réelle à battre) et pile de crochets (cinq sections, l'interdit retiré du monde, l'ordre est l'autorité). Le dépôt est la source de vérité. Serverless minimal : l'accès, rien d'autre.
 
 # ENVIRONNEMENT
 Personne ne répondra : tu tranches, tu écris l'hypothèse dans le dépôt, tu continues. L'état du run vit dans le dépôt : reprise après coupure. CLI Vercel authentifié ; clé de test dans .env jamais commitée ; fournisseur d'email et clé-valeur en variables Vercel ; boîte mail de test accessible. Supprime au fil de l'eau ce qui ne sert plus.
@@ -53,8 +53,8 @@ Tous les parcours passent en preview, assertions au vert bundle et mail compris 
 - L'état fait foi dans **`ETAT.md`** (où ça en est, ce qui reste, la reprise)
   et **`DECISIONS.md`** (chaque arbitrage et son motif). Une reprise se fait
   en les lisant — pas en refaisant le chemin.
-- **Deux techniques depuis le 2026-08-23** — méthode Boris et boucle du
-  gantelet (Matt Shumer / RoboNuggets, CC BY 4.0), motivées dans
+- **Deux techniques depuis le 2026-08-23** (trois depuis le 2026-09-04, voir
+  plus bas) — méthode Boris et boucle du gantelet (Matt Shumer / RoboNuggets, CC BY 4.0), motivées dans
   `DECISIONS.md` § 27. La règle qui les tient : **aucune règle de méthode
   n'est écrite dans l'écran**. Chaque technique remplit le contrat de
   `src/techniques.js` (longueur, étapes, oracle, grille du juge, textes
@@ -65,6 +65,15 @@ Tous les parcours passent en preview, assertions au vert bundle et mail compris 
   enregistrée sur l'entrée de bibliothèque (sinon un prompt rouvert est
   mesuré contre la méthode de l'autre). L'attribution CC BY vit dans
   `src/gauntlet.js` et dans l'aide, tenue par une assertion.
+- **Trois techniques depuis le 2026-09-04** : la **pile de crochets**
+  (`src/crochets.js`, `id: "hooks"`) s'ajoute, transposée des Function Hooks de
+  Claude Code (proposition Anthropic, `anthropics/claude-code#91870`, non
+  livrée) — `DECISIONS.md` § 30. Cinq sections, 3 à 8 crochets d'une ligne,
+  « sur * » en premier, `session.stop` obligatoire, dernière ligne « Sinon la
+  chaîne continue. » (jamais celle de Boris). Piège mesuré : **l'oracle de
+  Boris accepte un prompt de crochets** — c'est la technique enregistrée sur
+  l'entrée qui protège, pas l'oracle. Les tirets « — », « – » et « - » sont
+  normalisés avant lecture, sauf en tête de ligne (puce du retrait).
 - **Le gantelet écrit autour de 2500 caractères depuis le 2026-08-26**
   (`DECISIONS.md` § 29), et la leçon tient en une phrase : **sa longueur se
   règle en MOTS, jamais en caractères seuls**. Monter le plafond sans monter la
@@ -76,8 +85,8 @@ Tous les parcours passent en preview, assertions au vert bundle et mail compris 
   VERTE : sept l'ont été, tous supprimés ce jour-là.
 - **Deux instruments de vérification**, et le skill `/verify` du dépôt
   (`.claude/skills/verify/SKILL.md`) dit lequel prouve quoi :
-  1. `npm run verify` — **290 assertions en local** au 2026-08-26 (112 au
-     2026-08-02), au vert
+  1. `npm run verify` — **341 assertions en local** au 2026-09-04 (290 au
+     2026-08-26, 112 au 2026-08-02), au vert
      (les parcours d'accès s'y ajoutent quand `BASE_URL` est fourni : 122
      sur la production le 2026-08-01). Rien ne se déclare sans l'avoir
      rejoué. **Mais il n'exerce aucun palier responsive** : il force la

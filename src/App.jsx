@@ -67,6 +67,7 @@ const DEFAULTS = {
      réglage choisi. */
   charLimit: 3900,
   charLimitGauntlet: 2500,
+  charLimitHooks: 3000,
 };
 
 function loadSettings() {
@@ -101,6 +102,11 @@ function loadSettings() {
         parsed.charLimitGauntlet >= gauntlet.limiteMin
           ? gauntlet.capLimit(parsed.charLimitGauntlet)
           : DEFAULTS.charLimitGauntlet,
+      /* Troisième case, même règle : absente avant le 2026-09-04, elle
+         vaut le défaut ; présente, elle est rabattue dans ses bornes. */
+      charLimitHooks: Number.isFinite(parsed.charLimitHooks)
+        ? techniqueOf("hooks").capLimit(parsed.charLimitHooks)
+        : DEFAULTS.charLimitHooks,
     };
   } catch {
     return DEFAULTS;
@@ -2820,7 +2826,9 @@ function SettingsSheet({
               Ce réglage descend, il ne monte pas : {t.hardLimit} caractères est un plafond dur.
               {t.id === "boris"
                 ? " Il montait à 8000, et le vérificateur comparait à ce nombre-là — un prompt de plus de 4000 caractères en sortait « au vert »."
-                : ` Le prompt du gantelet se mesure d'abord en MOTS — ${t.fenetre().lo} à ${t.fenetre().hi} — et le plafond en caractères n'est là que pour arrêter un débordement franc.`}
+                : t.id === "gauntlet"
+                  ? ` Le prompt du gantelet se mesure d'abord en MOTS — ${t.fenetre().lo} à ${t.fenetre().hi} — et le plafond en caractères n'est là que pour arrêter un débordement franc.`
+                  : " Cinq sections et des crochets d'une ligne : si ça déborde, c'est le monde ou le fond qui s'est mis à raconter, jamais les crochets."}
             </p>
           </div>
         ))}

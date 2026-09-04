@@ -15,6 +15,7 @@
    ================================================================ */
 
 import { VISEE } from "./gauntlet.js";
+import { SECTIONS as SECTIONS_HOOKS, PLACEMENTS, CROCHETS_MIN, CROCHETS_MAX, DERNIERE_LIGNE } from "./crochets.js";
 
 /* La longueur annoncée du prompt de gantelet vient de la fenêtre visée,
    jamais d'un chiffre écrit à la main : « environ 170 mots » est resté
@@ -52,6 +53,18 @@ export const MOUVEMENTS_GANTELET = [
   ["Déploie des sous-agents et ultracode.", "La dernière ligne, toujours. Elle demande à l'agent de lancer ses constructeurs et ses juges en parallèle plutôt qu'un par un."],
 ];
 
+/* Les cinq sections du prompt produit par la pile de crochets. Les
+   titres viennent de la technique elle-même (`crochets.js`), jamais
+   recopiés : une assertion vérifie que ce sont ceux que le méta-prompt
+   impose, comme pour les huit de Boris. */
+export const SECTIONS_CROCHETS = [
+  [SECTIONS_HOOKS[0], "Ce que l'agent voit et peut faire, en liste finie : le dépôt, les outils, les comptes, les boîtes et clés de test. Rien n'existe en dehors de cette liste — ce qu'il a fait, c'est exactement les appels qu'il a passés."],
+  [SECTIONS_HOOKS[1], "Ce qui est ABSENT de son monde : la mise en ligne, l'argent, un envoi à une vraie personne, une suppression, un secret. Pas une interdiction — une absence. Une règle écrite en prose tient presque toujours et lâche le jour où elle compte ; une chose absente ne peut pas être appelée."],
+  [SECTIONS_HOOKS[2], `${CROCHETS_MIN} à ${CROCHETS_MAX} règles numérotées, chacune accrochée à UN geste précis (écrire un fichier, envoyer un mail, rendre la main), avec un placement — ${PLACEMENTS.map(([p]) => p).join(", ")} — et une décision. Le premier enveloppe tous les autres : rien en dessous ne peut le contourner. Le premier voit tout et journalise, refus compris ; un autre rejoue la vérification avant de rendre la main.`],
+  [SECTIONS_HOOKS[3], "Le travail lui-même, ce qui se passe quand aucune règle n'intercepte : le but, les événements réels du métier qui déclenchent le travail, et « chaque cassure est ton chantier suivant ». Jamais une liste de tâches."],
+  [SECTIONS_HOOKS[4], `Quand il a fini, vérifiable, verrouillé des deux côtés. Se termine toujours par « ${DERNIERE_LIGNE} »`],
+];
+
 const RAW_CHAPITRES = [
   {
     cle: "porte",
@@ -77,23 +90,26 @@ const RAW_CHAPITRES = [
   },
   {
     cle: "techniques",
-    titre: "Les deux techniques",
-    sert: "Choisir, avant d'écrire, laquelle des deux méthodes correspond à ce que tu confies.",
+    titre: "Les trois techniques",
+    sert: "Choisir, avant d'écrire, laquelle des trois méthodes correspond à ce que tu confies.",
     points: [
       "La méthode Boris écrit un mandat long — huit sections — pour un agent qui fait tourner quelque chose et découvre son travail là où ça casse. C'est ce qu'il te faut pour une application, un service, un algorithme : un périmètre à couvrir.",
       `La boucle du gantelet écrit un mandat d'un seul tenant — environ ${MOTS_TYPE} mots, sans la moindre section — pour un agent qui vise une chose qui existe déjà et recommence jusqu'à faire mieux qu'elle. C'est ce qu'il te faut quand tu vises une qualité et non un périmètre : une page, un texte, un outil, une analyse.`,
-      "La différence tient à un mot : où est la preuve. Chez Boris elle est DANS le mandat — des contrôles que l'agent se donne. Au gantelet elle est DEHORS — une chose réelle, déjà bonne, que l'agent doit aller chercher et battre.",
+      `La pile de crochets écrit un mandat de garde — cinq sections, ${CROCHETS_MIN} à ${CROCHETS_MAX} règles numérotées — pour un agent dont ce qui compte le plus est ce qu'il ne doit PAS faire : données réelles, argent, envois, mise en ligne. Chaque règle est accrochée au geste qu'elle gouverne, et ce qui lui est interdit n'est pas une consigne : c'est absent de son monde.`,
+      "La différence tient à un mot : où est la preuve. Chez Boris elle est DANS le mandat — des contrôles que l'agent se donne. Au gantelet elle est DEHORS — une chose réelle, déjà bonne, que l'agent doit aller chercher et battre. Aux crochets elle est dans l'ORDRE — la première règle enveloppe toutes les autres, et rien en dessous ne peut la contourner.",
       "Le choix se fait au-dessus de ton idée, avant de lancer. Il se verrouille dès qu'un prompt est à l'écran : changer de technique sous un prompt déjà écrit reviendrait à le juger avec les règles de l'autre. « Nouveau prompt » rouvre le choix.",
       "La boucle du gantelet est une technique de Matt Shumer, empaquetée en skill par RoboNuggets et reprise ici en français, sous licence CC BY 4.0. Elle n'est pas de nous, et elle est citée partout où elle est utilisée. Une seule chose a été changée par rapport au skill d'origine, et la licence demande de le dire : le mandat produit est plus long que les 120 à 180 mots qu'il prescrit.",
+      "La pile de crochets est transposée des « Function Hooks » de Claude Code, une proposition d'architecture d'Anthropic mise en discussion publique le 3 septembre 2026 (Alice Poteat, issue GitHub anthropics/claude-code n° 91870) et non livrée à ce jour. Ce n'était pas une technique de prompt : c'est une façon de brancher des règles sur un outil. Ce qui en est repris, c'est l'idée — un monde fini, des capacités retirées plutôt qu'interdites, des règles accrochées à des gestes, un ordre qui est une autorité.",
     ],
   },
   {
     cle: "questions",
     titre: "Ce qu'on te demande avant d'écrire",
-    sert: "Une seule étape, deux formes : des questions (Boris) ou le choix d'une barre (gantelet).",
+    sert: "Une seule étape, deux formes : des questions (Boris, crochets) ou le choix d'une barre (gantelet).",
     points: [
       "Avec la méthode Boris : trois questions au maximum, et seulement si la réponse change matériellement ce qui va être écrit. Souvent il n'y en a aucune — c'est bon signe, ton idée se suffisait. Une réponse laissée vide sera tranchée par l'hypothèse la plus raisonnable, écrite noir sur blanc dans le résultat.",
       "Avec la boucle du gantelet : deux ou trois références te sont proposées, tu en choisis une, ou tu écris la tienne. Si ton idée en nommait déjà une, rien ne t'est demandé.",
+      "Avec la pile de crochets : mêmes questions que chez Boris, trois au plus, mais elles portent sur le monde de l'agent — ce qu'il a sous la main — et sur ce qui, dans ton domaine, engage pour de bon et doit lui être retiré.",
       "Une bonne référence tient à trois choses : elle est PRÉCISE (« la page tarifs de Stripe », pas « les beaux sites »), on peut vraiment aller la chercher (la capturer, la lire, l'exécuter), et on peut poser les deux côte à côte pour en désigner une.",
       "Prends la plus dure que l'agent puisse réellement atteindre. Une référence trop facile fait gagner au premier tour et la boucle s'arrête sans avoir servi ; une référence floue fait tout approuver, parce que le juge finit par l'inventer.",
       "Il n'y a pas de mauvaise réponse courte. Trois mots valent mieux qu'un paragraphe : ce sont des points de décision, pas un questionnaire.",
@@ -206,6 +222,18 @@ const RAW_CHAPITRES = [
       "Les deux dernières lignes parlent à Claude Code : « /loop » relance tant que tu n'arrêtes pas, « ultracode » autorise le travail à plusieurs agents en parallèle. Avec un autre agent, elles se remplacent par la même consigne en français.",
     ],
     sections: MOUVEMENTS_GANTELET,
+  },
+  {
+    cle: "crochets",
+    titre: "Pile de crochets — les cinq sections",
+    sert: "La structure du prompt produit par la pile de crochets, et à quoi sert chaque section.",
+    points: [
+      "Un prompt de la pile de crochets tient en cinq sections, toujours les mêmes, toujours dans cet ordre : le monde, ce qui en est retiré, les crochets, le fond, la sortie. Il décrit un garde autant qu'un mandat.",
+      `Chaque crochet tient sur une ligne : « N. sur <geste> — <placement> : <décision> ». Le geste est nommé comme un événement (fs.write, mail.send, session.stop) ; le placement dit QUAND la règle agit — ${PLACEMENTS.map(([p, quoi]) => `${p} (${quoi})`).join(" ; ")}.`,
+      "L'ordre est l'autorité : le crochet n° 1 enveloppe tous les autres, comme des pelures d'oignon. C'est pour ça que le journal (« sur * ») est toujours le premier — placé plus bas, il ne verrait pas les refus décidés au-dessus de lui.",
+      "Rien d'autre n'y entre : ni architecture, ni pile technique, ni consigne de comportement. Le crochet qui voit tout journalise déjà ; chaque instruction en trop est une décision retirée à l'agent.",
+    ],
+    sections: SECTIONS_CROCHETS,
   },
   {
     cle: "securite",

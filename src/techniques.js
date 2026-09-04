@@ -33,6 +33,7 @@
 
 import * as boris from "./meta.js";
 import * as gauntlet from "./gauntlet.js";
+import * as crochets from "./crochets.js";
 
 /* ---------- méthode Boris ----------
 
@@ -211,7 +212,66 @@ const GAUNTLET = {
     "Dis ce que tu veux obtenir et à quelle hauteur. L'atelier te propose des références réelles à battre, tu en choisis une, et il écrit le mandat : aller chercher cette chose-là, se comparer à elle à l'aveugle, et recommencer tant qu'on ne l'a pas dépassée.",
 };
 
-export const TECHNIQUES = [BORIS, GAUNTLET];
+/* ---------- pile de crochets ----------
+   Transposée des Function Hooks de Claude Code (proposition Anthropic,
+   2026-09-03, non livrée) — voir l'en-tête de `crochets.js`. Un mandat
+   de GARDE : ce que l'agent ne doit jamais faire est une absence, pas
+   une consigne, et chaque règle est accrochée au geste qu'elle gouverne. */
+
+const CROCHETS = {
+  id: "hooks",
+  nom: "Pile de crochets",
+  court: "Crochets",
+  resume: "Le mandat d'un agent dont chaque règle est accrochée au geste qu'elle gouverne, et dont l'interdit est une absence.",
+  quand: "Ce qui compte le plus est ce que l'agent ne doit PAS faire : données réelles, argent, envois, prod. Prompt en cinq sections, des crochets numérotés du plus haut au plus bas, l'oracle est dans l'ORDRE.",
+  unite: "car.",
+  sortie: `un prompt de cinq sections, ${crochets.CROCHETS_MIN} à ${crochets.CROCHETS_MAX} crochets`,
+  cleReglage: "charLimitHooks",
+  credit: "Transposée des Function Hooks de Claude Code (Anthropic, proposition publique du 2026-09-03).",
+
+  hardLimit: crochets.HARD_LIMIT,
+  limiteMin: crochets.LIMITE_MIN,
+  limiteDefaut: crochets.LIMITE_DEFAUT,
+  capLimit: crochets.capLimit,
+  fenetre: (limit) => boris.targetWindow(crochets.capLimit(limit)),
+
+  buildMeta: crochets.buildMeta,
+
+  /* Même forme d'étape 1 que Boris — des questions — donc le même écran,
+     sans une troisième branche dans l'atelier. */
+  etape1: {
+    cle: "questions",
+    titre: "Le monde et le retrait",
+    instruction: crochets.etape1Instruction,
+  },
+  etape2Instruction: crochets.etape2Instruction,
+
+  verifyPrompt: crochets.verifyPrompt,
+  repairInstruction: crochets.repairInstruction,
+  /* Le choix par défaut convient : une tentative qui ne pèche que par la
+     longueur se raccourcit, et « la plus courte » est la bonne. */
+  choisirMeilleure: undefined,
+
+  CRITERES: crochets.CRITERES,
+  auditInstruction: crochets.auditInstruction,
+  auditApplyInstruction: crochets.auditApplyInstruction,
+  correctionInstruction: crochets.correctionInstruction,
+  baseConvoFor: crochets.baseConvoFor,
+
+  exempleIdee:
+    "Exemple : un agent qui tient la boîte support d'une boutique en ligne — il répond, crée les avoirs, mais un remboursement réel ou un mail à un client hors boîte de test n'existent pas dans son monde…\n\n" +
+    "Ou : un agent qui maintient et déploie un site de documentation — preview à volonté, la mise en ligne se dépose en validation, aucun secret ne passe par un fichier suivi…",
+  exempleContraintes:
+    "Ce que l'agent a sous la main (dépôt, comptes, boîtes de test), ce qui engage dans ton domaine et doit être ABSENT, la commande qui dit que c'est fini…",
+  exempleCorrection:
+    "Ex. : retire aussi git.push vers main, ajoute un crochet modifiant sur mail.send, fais refuser session.stop tant qu'un test est rouge…",
+
+  bandeau: "Monde — Retiré — Crochets — Fond — Sortie",
+  accroche:
+    "Dis ce que tu confies et ce qui, dans ton domaine, engage pour de bon. L'atelier écrit le monde de l'agent, retire ce qu'il ne doit jamais pouvoir faire, et accroche chaque règle au geste qu'elle gouverne, du plus haut au plus bas : le premier crochet enveloppe tous les autres. Une question ne t'est posée que si la réponse change le monde ou le retrait.",
+};
+
+export const TECHNIQUES = [BORIS, GAUNTLET, CROCHETS];
 
 export const DEFAULT_TECHNIQUE = BORIS.id;
 

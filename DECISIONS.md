@@ -748,6 +748,82 @@ caractères du premier coup**, oracle au vert, sans réparation.
 
 ---
 
+## 30. Une troisième technique — la pile de crochets
+
+Demande de Gabriel le 2026-09-04 : analyser la « nouvelle méthode » annoncée
+par ClaudeDevs et en tirer une technique pour l'atelier.
+
+**Ce que c'est, mesuré aux sources.** Le post (x.com/ClaudeDevs, 2026-09-03)
+annonce *Function Hooks* : une **proposition** d'Anthropic, **non livrée**, mise
+en discussion sur `anthropics/claude-code#91870` (Alice Poteat, *Function
+Hooks: Core Architecture*, 8 pages). Ce n'est pas une méthode de prompt : c'est
+une architecture de plugin. Des crochets TypeScript `($, e, next)` façon
+Koa/Express ; `$` est le monde — tout ce qu'un plugin peut voir ou faire, et
+**rien d'ambiant** ; un événement est une méthode de `$` (`tool.call`,
+`fs.write`, `ui.render`) ; **l'ordre d'enregistrement est l'emboîtement** (le
+premier enveloppe les autres, les admins mettent leurs contrôles en tête) ;
+cinq placements (avant, après, pendant, à la place, modifiant) ; un
+administrateur **retire des capacités de `$`** et rien en dessous ne peut les
+invoquer ; un crochet sur `*` voit tout et fait un journal d'audit en une
+fonction. La doc officielle des hooks (code.claude.com/docs/en/hooks) décrit
+les hooks *actuels* — command, prompt, agent, http, sur une trentaine
+d'événements — que la proposition complète d'un cinquième type.
+
+**Pourquoi c'est une technique de prompt malgré tout.** Le fil de l'issue le
+dit mieux que la proposition : « une prohibition exprimée en prose tient la
+plupart du temps et lâche exactement quand les enjeux sont les plus hauts ;
+une contrainte mécanique tient ». Et : des hooks shell qui « ne peuvent pas
+échouer » rendent un journal muet — « ran and worked » indiscernable de « ran
+and silently did nothing ». Transposé à un mandat d'agent, ça donne trois
+règles que ni Boris ni le gantelet n'imposent : l'interdit est une **absence**
+du monde, pas une consigne ; chaque règle est **accrochée à un geste nommé**
+avec un placement ; **l'ordre est une autorité**, et le journal est en tête.
+
+**La forme retenue** (`src/crochets.js`) : cinq sections `# LE MONDE`,
+`# RETIRÉ`, `# CROCHETS`, `# LE FOND`, `# SORTIE`. Les crochets tiennent sur
+une ligne : « N. sur <événement> {filtre} — <placement> : <décision> », de 3 à
+8, `sur *` **en premier**, `sur session.stop` obligatoire, au moins un « à la
+place ». Dernière ligne « Sinon la chaîne continue. » — pas celle de Boris, pour
+que les deux oracles ne se confondent jamais. Longueur en caractères, plafond
+dur commun 3 950, défaut 3 000, fenêtre 73–90 % comme Boris.
+
+**Ce qui a été évité, un piège par assertion :**
+
+- **L'oracle de Boris ACCEPTE un prompt de crochets** (il ne teste que la
+  première section et « # SORTIE »). Ce n'est pas un défaut à corriger, c'est
+  la raison pour laquelle la technique doit suivre l'entrée de bibliothèque —
+  déjà câblé au § 27, et l'assertion le dit désormais dans ce sens.
+- **Les tirets.** Un modèle rend « — », « – » ou « - » ; un vérificateur qui
+  n'accepte que le cadratin refuse un prompt juste. Les trois sont normalisés
+  avant lecture, mais **jamais en tête de ligne**, où « - » est une puce du
+  retrait.
+- **La réparation par défaut parle de huit sections** : elle est propre à la
+  technique, et une assertion vérifie qu'elle dit « cinq » et nomme les cinq
+  placements.
+- **Étape 1 sans troisième branche d'écran** : les crochets posent des
+  questions comme Boris (`cle: "questions"`), mais sur le monde et le
+  retrait. Rien n'a bougé dans `App.jsx` hors la case de réglage
+  (`charLimitHooks`) et la phrase sous le curseur.
+- **Grilles du juge disjointes deux à deux** (l'assertion à deux termes
+  Boris/gantelet est devenue un ensemble sur les trois).
+
+**Éprouvé.** `npm run verify` : **341 assertions**, dont deux appels réels à
+Sonnet 5 avec ce méta-prompt — 2 657 caractères en deux tentatives, puis 2 958
+du premier coup, 7 crochets, `sur *` en premier, `session.stop` retenu, le
+remboursement retiré comme l'idée le demandait. L'oracle est tenable par un
+modèle réel.
+
+**Attribution.** Pas de licence en jeu — c'est une idée d'architecture, pas un
+texte repris — mais la source est citée dans l'en-tête du fichier, dans
+l'aide (assertion : « Function Hooks » et « 91870 »), et ici.
+
+**Atelier-Cartes.** La même technique est rejouée en Python dans
+`Atelier-Cartes/techniques/verifier.py crochets` (33 cas au test de l'oracle),
+documentée dans `techniques/crochets.md`, et la carte de la tour Dev propose
+désormais BORIS, GANTELET ou CROCHETS (prompt 3 822, ligne 3 923/3990).
+
+---
+
 ## Reste à la main de Gabriel
 
 - Vérifier un domaine d'envoi chez Resend, pour que le lien de
