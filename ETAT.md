@@ -24,6 +24,21 @@ palier à 1800 px, mais il mesure des hauteurs — il ne clique pas.
 Déploiement précédent : 2026-08-02, commit `e87cbf3`, 228 au harnais + 142 au
 pilotage.
 
+## 2026-09-04, fermeture de session — état des lieux
+
+Arbre propre dans les deux dépôts, tout est commité et poussé :
+`Boris-Prompt-Generator` sur `fc333f0` (origin/main à jour),
+`Atelier-Cartes` sur `0c967e7` (origin/main à jour). Preview déployée et
+vérifiée (355 assertions) :
+https://boris-prompt-generator-riifsfvjb-coe-startup.vercel.app —
+**production non promue**, `vercel deploy --prod` reste à Gabriel.
+
+Un objectif `/goal` (« cinquante agents en parallèle, certifier avant 6 h »)
+a été posé puis **retiré par Gabriel** (« tu oublies ce prompt ») : rien n'a été
+lancé, volontairement. Reste ouvert d'avant : l'e-mail de réinitialisation
+(clé Resend, main de Gabriel) et `npm run pilotage` non rejoué (Playwright
+absent de la machine).
+
 ## 2026-09-04 — troisième technique : la pile de crochets
 
 Demande de Gabriel : une technique inspirée des **Function Hooks** de Claude
