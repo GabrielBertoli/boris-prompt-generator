@@ -62,6 +62,10 @@ Preview déployée et vérifiée : https://boris-prompt-generator-q909ya7b5-coe-
 bundle, surface publique, écran), JavaScript servi byte-identique au build
 local (`index-CaRJdxMS.js`). Commit `e325d30` et suivant, **non poussés**.
 
+**Tarifs relus à la source le même jour** (`DECISIONS.md` § 32) : Sonnet 5
+passe de 3 $ / 15 $ à 2 $ / 10 $, le cache est compté à son vrai prix sur
+les cinq modèles. Les totaux déjà cumulés gardent l'ancien calcul.
+
 Ce qui reste :
 
 1. Recharger le crédit (Gabriel), puis `npm run banc` une fois en entier pour

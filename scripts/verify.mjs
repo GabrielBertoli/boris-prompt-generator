@@ -630,6 +630,32 @@ section("L'oracle de la méthode Opus 5.5");
     Math.abs(costOf("claude-opus-5-5", { cache_read_input_tokens: 1e6 }) - 0.2) < 1e-9,
     `${costOf("claude-opus-5-5", { cache_read_input_tokens: 1e6 })}`
   );
+  /* Les tarifs, relus le 2026-09-23 sur la page officielle. Chaque modèle
+     proposé a ses quatre prix : un modèle sans ligne coûterait « 0 $ » à
+     l'écran sans que rien le signale. */
+  const CHAMPS_PRIX = ["in", "out", "cacheWrite5m", "cacheWrite1h", "cacheRead"];
+  const sansPrix = MODELS.filter((m) => !CHAMPS_PRIX.every((k) => Number(PRICES[m.id]?.[k]) > 0)).map((m) => m.id);
+  assert("chaque modèle proposé a ses quatre prix", sansPrix.length === 0, sansPrix.join(", ") || "tous");
+  assert("Sonnet 5 est facturé 2 $ / 10 $, plus 3 $ / 15 $", PRICES["claude-sonnet-5"].in === 2 && PRICES["claude-sonnet-5"].out === 10);
+  /* L'écriture en cache vaut 1,25 fois l'entrée (5 min) et 2 fois (1 h),
+     sur tous les modèles — la règle de la page, tenue ligne par ligne. */
+  assert(
+    "les écritures en cache suivent 1,25× et 2× l'entrée",
+    MODELS.every((m) => {
+      const p = PRICES[m.id];
+      return Math.abs(p.cacheWrite5m - p.in * 1.25) < 1e-9 && Math.abs(p.cacheWrite1h - p.in * 2) < 1e-9;
+    })
+  );
+  const million = { input_tokens: 1e6, output_tokens: 1e6 };
+  assert("un million d'entrée et de sortie sur Sonnet 5 coûte 12 $", Math.abs(costOf("claude-sonnet-5", million) - 12) < 1e-9, `${costOf("claude-sonnet-5", million)}`);
+  assert(
+    "une écriture en cache d'une heure est comptée au double de l'entrée",
+    Math.abs(costOf("claude-sonnet-5", { cache_creation_input_tokens: 1e6, cache_creation: { ephemeral_1h_input_tokens: 1e6 } }) - 4) < 1e-9
+  );
+  assert(
+    "et sans détail, au tarif 5 minutes",
+    Math.abs(costOf("claude-sonnet-5", { cache_creation_input_tokens: 1e6 }) - 2.5) < 1e-9
+  );
   assert("Opus 5.5 est reconnu comme pensant toujours", api.PENSE_TOUJOURS.test("claude-opus-5-5"));
   /* La méthode impose son rédacteur (mesuré au banc) ; il doit exister au
      choix des modèles, sinon l'écran afficherait un identifiant nu. */

@@ -976,6 +976,34 @@ juge en effort max (huit longs appels par tour, onze tours joués).
 
 ---
 
+## 32. Les tarifs, relus à la source
+
+Demande de Gabriel le 2026-09-23 : facturer avec les derniers coûts de l'API
+pour tous les modèles. Relus sur la page officielle
+(platform.claude.com/docs/en/about-claude/pricing) le jour même.
+
+- **Sonnet 5 était compté 3 $ / 15 $ ; il coûte 2 $ / 10 $.** C'est le
+  rédacteur par défaut : le compteur surestimait d'environ moitié la plupart
+  des générations. Opus 5, Fable 5, Haiku 4.5 et Opus 5.5 étaient justes sur
+  l'entrée et la sortie.
+- **Le cache était faux dans les deux sens** : lecture supposée au dixième de
+  l'entrée (Opus 5.5 lit au vingtième), écriture comptée au prix de l'entrée
+  (elle coûte 1,25 fois pour 5 minutes, 2 fois pour 1 heure). `PRICES` porte
+  désormais les quatre prix par modèle, et `costOf` ventile l'écriture par
+  durée quand l'API la détaille (`cache_creation.ephemeral_1h_input_tokens`).
+  L'atelier ne pose pas encore de `cache_control` : c'est aujourd'hui sans
+  effet, et juste le jour où il en posera.
+- Assertions : chaque modèle proposé a ses quatre prix (sinon il coûterait
+  « 0 $ » en silence), les écritures suivent 1,25× et 2× l'entrée, et trois
+  calculs témoins.
+- **Ce qui n'est pas rattrapable** : les totaux « dépense à date » déjà
+  enregistrés ont été cumulés à l'ancien tarif. Seul le total est conservé,
+  pas le détail par modèle : il ne peut pas être recalculé. Il cesse de
+  dériver à partir de maintenant.
+- Non modélisés : les remises (lot, lancement) et le mode rapide.
+
+---
+
 ## Reste à la main de Gabriel
 
 - **Recharger le crédit Anthropic** de la clé partagée de l'atelier (la même

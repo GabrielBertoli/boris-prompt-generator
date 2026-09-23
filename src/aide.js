@@ -213,7 +213,7 @@ const RAW_CHAPITRES = [
     points: [
       "Chaque génération coûte quelques centimes : le modèle qui écrit, plus le juge qui relit.",
       "Trois chiffres sont affichés : cette génération, le juge, et ton total depuis le début — tous appareils confondus.",
-      "C'est un ordre de grandeur au tarif public, pas une facture : les remises et les économies de cache ne sont pas modélisées. Le vrai montant est plus bas.",
+      "C'est un ordre de grandeur au tarif public d'Anthropic, cache compris, pas une facture : les remises ne sont pas modélisées. Le vrai montant peut être un peu plus bas.",
     ],
   },
   {

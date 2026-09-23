@@ -129,28 +129,41 @@ export const MODELS = [
   { id: "claude-haiku-4-5", label: "Haiku 4.5", note: "économique" },
 ];
 
-/* Tarifs Anthropic en $ par million de jetons (entrée / sortie),
-   prix catalogue au 2026-08. Le compteur est un ordre de grandeur
-   honnête, pas une facture : les remises de lancement et le cache
-   ne sont pas modélisés. */
-/* `cache` : le prix d'une lecture en cache quand il n'est pas le dixième
-   de l'entrée. Opus 5.5 la facture 0,20 $ pour une entrée à 4 $ — le
-   vingtième ; le calcul par défaut l'aurait comptée double. */
+/* Tarifs Anthropic en $ par million de jetons, relus le 2026-09-23 sur
+   la page officielle (platform.claude.com/docs/en/about-claude/pricing).
+   QUATRE prix par modèle, pas deux : l'entrée, l'écriture en cache (5 min
+   et 1 h), la lecture en cache, la sortie. Le calcul supposait une lecture
+   au dixième de l'entrée et une écriture au prix de l'entrée ; c'était
+   faux dans les deux sens — Opus 5.5 lit au vingtième, et toute écriture
+   coûte 1,25 fois (5 min) ou 2 fois (1 h) l'entrée.
+   Mesuré le même jour : Sonnet 5 était facturé 3 $ / 15 $ au lieu de
+   2 $ / 10 $ — la moitié de plus sur le modèle qui écrit par défaut.
+   Le compteur reste un ordre de grandeur honnête, pas une facture : les
+   remises (lot, lancement) et le mode rapide ne sont pas modélisés.
+   Un modèle ajouté à MODELS sans ligne ici est refusé par une assertion. */
 export const PRICES = {
-  "claude-opus-5-5": { in: 4, out: 20, cache: 0.2 },
-  "claude-sonnet-5": { in: 3, out: 15 },
-  "claude-opus-5": { in: 5, out: 25 },
-  "claude-fable-5": { in: 10, out: 50 },
-  "claude-haiku-4-5": { in: 1, out: 5 },
+  "claude-sonnet-5": { in: 2, out: 10, cacheWrite5m: 2.5, cacheWrite1h: 4, cacheRead: 0.2 },
+  "claude-opus-5-5": { in: 4, out: 20, cacheWrite5m: 5, cacheWrite1h: 8, cacheRead: 0.2 },
+  "claude-opus-5": { in: 5, out: 25, cacheWrite5m: 6.25, cacheWrite1h: 10, cacheRead: 0.5 },
+  "claude-fable-5": { in: 10, out: 50, cacheWrite5m: 12.5, cacheWrite1h: 20, cacheRead: 1 },
+  "claude-haiku-4-5": { in: 1, out: 5, cacheWrite5m: 1.25, cacheWrite1h: 2, cacheRead: 0.1 },
 };
 
 export function costOf(model, usage) {
   const price = PRICES[model];
   if (!price || !usage) return 0;
-  const input = (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0);
-  const cached = usage.cache_read_input_tokens || 0;
+  /* L'écriture en cache se ventile par durée quand l'API la détaille
+     (`cache_creation.ephemeral_1h_input_tokens`) ; sinon, elle est au
+     tarif 5 minutes, la durée par défaut. */
+  const ecrit = usage.cache_creation_input_tokens || 0;
+  const ecrit1h = Math.min(ecrit, usage.cache_creation?.ephemeral_1h_input_tokens || 0);
   return (
-    (input * price.in + cached * (price.cache ?? price.in * 0.1) + (usage.output_tokens || 0) * price.out) / 1e6
+    ((usage.input_tokens || 0) * price.in +
+      (ecrit - ecrit1h) * price.cacheWrite5m +
+      ecrit1h * price.cacheWrite1h +
+      (usage.cache_read_input_tokens || 0) * price.cacheRead +
+      (usage.output_tokens || 0) * price.out) /
+    1e6
   );
 }
 
