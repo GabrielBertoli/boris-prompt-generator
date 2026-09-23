@@ -2,9 +2,15 @@
 
 **EN PRODUCTION** — https://boris-prompt-generator.vercel.app
 
-Dernier déploiement : **2026-08-23, commit `b1b50dd`**, poussé sur
-`origin/main`, arbre propre. Vérifié sur l'alias stable **avec** `VERIFY_CODE`,
-donc parcours d'accès compris : zéro échec.
+Dernier déploiement : **2026-09-23, promu à la demande explicite de Gabriel**
+(« mets-le à jour »), commit `3de2662` et suivants, poussés sur `origin/main`.
+Vérifié sur l'alias stable **sans** `VERIFY_CODE` ni clé API (crédit épuisé) :
+437 assertions au vert — bundle servi identique au build local
+(`index-mW9l0H5B.js`), surface publique, écran. Les parcours d'accès et la
+génération réelle restent à rejouer à la recharge du crédit.
+
+Déploiement d'avant : 2026-08-23, commit `b1b50dd`, vérifié avec
+`VERIFY_CODE`, zéro échec.
 
 Le JavaScript servi est byte-identique au build local. **La feuille de style,
 non — et c'est bénin, vérifié règle par règle** : la construction distante
@@ -75,8 +81,12 @@ Ce qui reste :
 1. Recharger le crédit (Gabriel), puis `npm run banc` une fois en entier pour
    confirmer le dernier tour, et `npm run verify` avec la clé et
    `VERIFY_CODE` contre la preview.
-2. Pousser `main` et promouvoir en production — `vercel deploy --prod` reste
-   à Gabriel.
+2. ~~Production~~ : faite le 2026-09-23 sur demande de Gabriel. La carte de
+   la tour est passée en `claude-opus-5-5` · `xhigh` (page Claude active,
+   prompt et page Codex inchangés ; état d'avant sauvegardé hors dépôt).
+3. La tour ne liste pas Opus 5.5 dans son catalogue (`MODELES`,
+   `server.js`) : elle l'accepte, mais l'affiche par son identifiant brut.
+   L'y ajouter est un chantier de la tour, pas d'ici.
 
 ## 2026-09-04, fermeture de session — état des lieux
 
