@@ -57,11 +57,18 @@ Ce qui est fait (motifs : `DECISIONS.md` § 31) :
   justes, notes 7,5–10 (moyenne 9,1) ; tour suivant coupé par le crédit,
   6/6 jugés conformes.
 
+Preview déployée et vérifiée : https://boris-prompt-generator-q909ya7b5-coe-startup.vercel.app
+— 422 assertions au vert contre elle (sans clé API ni `VERIFY_CODE` :
+bundle, surface publique, écran), JavaScript servi byte-identique au build
+local (`index-CaRJdxMS.js`). Commit `e325d30` et suivant, **non poussés**.
+
 Ce qui reste :
 
 1. Recharger le crédit (Gabriel), puis `npm run banc` une fois en entier pour
-   confirmer le dernier tour, et `npm run verify` avec la clé.
-2. Production : non promue — `vercel deploy --prod` reste à Gabriel.
+   confirmer le dernier tour, et `npm run verify` avec la clé et
+   `VERIFY_CODE` contre la preview.
+2. Pousser `main` et promouvoir en production — `vercel deploy --prod` reste
+   à Gabriel.
 
 ## 2026-09-04, fermeture de session — état des lieux
 
