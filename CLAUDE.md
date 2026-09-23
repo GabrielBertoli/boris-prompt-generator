@@ -128,7 +128,13 @@ Tous les parcours passent en preview, assertions au vert bundle et mail compris 
   3. `npm run banc` — le banc de la méthode Opus 5.5 : utilisateurs fictifs,
      vrai circuit, juge Opus 5.5 en effort max contre le guide relu à la
      source. Le seul qui prouve la FIDÉLITÉ d'un prompt et la justesse des
-     questions. Payant, et sur la clé partagée : à lancer en le sachant.
+     questions. **Sur l'abonnement Max, jamais sur la clé** : chaque appel
+     est un `claude -p` isolé (§ 34). Il consomme la limite hebdomadaire —
+     `--effort-juge high` pour la ménager.
+  **La clé API du `.env` EST la clé du site.** `npm run verify` ne s'en sert
+  plus que sur `VERIFY_API=1` (générations réelles payantes), et seulement
+  si Gabriel l'a demandé : règle « abonnement d'abord » du `CLAUDE.md`
+  racine et de `~/.claude/CLAUDE.md`.
 - Deux règles de produit posées le 2026-08-02, motivées dans `DECISIONS.md`
   § 19 et § 20 : **aucun prompt au-dessus de 3950 caractères ne sort de
   l'atelier** (plafond dans `verifyPrompt`, pas dans le réglage), et **tout

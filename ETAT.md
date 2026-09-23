@@ -76,6 +76,12 @@ les cinq modèles. Les totaux déjà cumulés gardent l'ancien calcul.
 effort `medium`, rédaction et juge en `high`, le juge en contexte neuf ; plus
 de choix de modèle dans les réglages.
 
+**Abonnement d'abord** (`DECISIONS.md` § 34) : le banc tourne sur
+l'abonnement Max (`claude -p` isolé, essai d'un cas vert), `npm run verify`
+ne touche la clé que sur `VERIFY_API=1`, et le site dit en français quand sa
+clé est à sec. Règle posée pour toutes les cartes (`~/.claude/CLAUDE.md`,
+`CLAUDE.md` racine, `~/.codex/AGENTS.md`).
+
 Ce qui reste :
 
 1. Recharger le crédit (Gabriel), puis `npm run banc` une fois en entier pour

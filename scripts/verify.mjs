@@ -3,6 +3,7 @@
 
      vercel env pull .env.local
      BASE_URL=https://…vercel.app VERIFY_USER=karl VERIFY_CODE=… npm run verify
+     VERIFY_API=1 npm run verify   # + les générations réelles, PAYANTES sur la clé API
 
    Chaque assertion affiche ce qu'elle a mesuré. Un seul échec fait sortir
    en code 1 : rien ne se déclare au vert sur une impression.
@@ -28,7 +29,12 @@ loadEnvFile(".env");
 const BASE = (process.env.BASE_URL || "").replace(/\/$/, "");
 const USER = process.env.VERIFY_USER || "karl";
 const CODE = process.env.VERIFY_CODE || "";
-const ANTHROPIC = process.env.ANTHROPIC_TEST_KEY || process.env.ANTHROPIC_API_KEY || "";
+/* Les générations réelles coûtent sur une clé API — la même que celle du
+   site. Elles ne partent QUE sur demande explicite (`VERIFY_API=1`) : la
+   clé présente dans `.env` ne suffit plus. Règle « abonnement d'abord »,
+   posée le 2026-09-23 après qu'un banc a vidé cette clé. */
+const ANTHROPIC =
+  process.env.VERIFY_API === "1" ? process.env.ANTHROPIC_TEST_KEY || process.env.ANTHROPIC_API_KEY || "" : "";
 
 let failures = 0;
 let cookie = "";
@@ -716,6 +722,22 @@ section("L'oracle de la méthode Opus 5.5");
   assert("à Opus 5.5, aucun réglage de réflexion n'est envoyé", c55 && !("thinking" in c55), JSON.stringify(c55?.thinking));
   assert("et la place de sa réflexion s'ajoute au budget", c55?.max_tokens === 1200 + api.MARGE_REFLEXION, `${c55?.max_tokens}`);
   assert("l'effort du rôle part dans output_config", c55?.output_config?.effort === "high", JSON.stringify(c55?.output_config));
+  /* Crédit épuisé : le message dit quoi faire, en français, au lieu de
+     l'erreur brute de l'API. */
+  {
+    const vrai = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ error: { message: "Your credit balance is too low to access the Anthropic API." } }), { status: 400 });
+    let msg = "";
+    try {
+      await api.callClaude([{ role: "user", content: "x" }], { apiKey: "k", model: "claude-opus-5-5", maxTokens: 10 });
+    } catch (e) {
+      msg = e.message;
+    } finally {
+      globalThis.fetch = vrai;
+    }
+    assert("un crédit épuisé se dit en français, avec le geste à faire", /plus de crédit/.test(msg) && /ta propre clé/.test(msg), msg);
+  }
   const c5 = await envoye("claude-sonnet-5");
   assert("aux autres, la réflexion reste coupée et le budget inchangé", c5?.thinking?.type === "disabled" && c5?.max_tokens === 1200);
   assert("et sans effort demandé, aucun output_config", !("output_config" in c5));
@@ -1893,7 +1915,11 @@ if (!existsSync(CHROME) || !bundle) {
 section("Générateur (appel direct Anthropic)");
 
 if (!ANTHROPIC) {
-  console.log("… ignoré : ANTHROPIC_TEST_KEY non fourni.");
+  console.log(
+    process.env.VERIFY_API === "1"
+      ? "… ignoré : VERIFY_API=1 mais aucune clé (ANTHROPIC_TEST_KEY) fournie."
+      : "… ignoré : les générations réelles coûtent sur la clé API — VERIFY_API=1 pour les lancer."
+  );
 } else {
   const limit = 3900;
   const { techniqueOf } = await import("../src/techniques.js");

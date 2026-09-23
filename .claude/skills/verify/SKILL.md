@@ -101,14 +101,20 @@ sous assertions — puis un juge **Opus 5.5 en effort max** lit le guide
 d'Anthropic (relu à la source, jamais copié dans le dépôt) et rend, règle par
 règle, conformité du prompt ET justesse des questions. Il prouve ce que
 l'oracle ne peut pas : qu'une clause s'applique, qu'une question était la
-bonne. Payant (le juge surtout) : hors de `npm run verify`, à rejouer après
-chaque retouche de `src/opus55.js`.
+bonne. **Tout passe par l'abonnement Max** (`claude -p` isolé, sans clé
+API) : il consomme la limite hebdomadaire, et affiche l'équivalent API
+consommé. Hors de `npm run verify`, à rejouer après chaque retouche de
+`src/opus55.js`.
 
 ```bash
 npm run banc                          # les huit cas, rédacteur Sonnet 5
 npm run banc -- --cas vague,design    # quelques cas
-npm run banc -- --rédacteur claude-opus-5-5
+npm run banc -- --effort-juge high      # ménage la limite hebdomadaire
 ```
+
+Les générations réelles de `npm run verify` coûtent sur la CLÉ API (celle du
+site) : elles ne partent que sur `VERIFY_API=1`, et seulement si Gabriel l'a
+demandé.
 
 ## Escalade
 

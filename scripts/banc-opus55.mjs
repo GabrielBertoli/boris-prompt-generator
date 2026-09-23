@@ -10,42 +10,41 @@
    règle, si le prompt produit y est conforme — et si les questions
    posées étaient les bonnes.
 
-   Ce banc coûte de l'argent à chaque tour (quelques dizaines de centimes
-   par cas, surtout le juge) : il ne tourne pas dans `npm run verify`. On
-   le relance après avoir touché à `src/opus55.js`. */
+   TOUT passe par l'ABONNEMENT Max de Gabriel, jamais par une clé API :
+   chaque appel est un Claude Code sans interface (`claude -p`), isolé —
+   aucun outil, aucun skill, aucun serveur MCP, aucun réglage, un prompt
+   système neutre (491 jetons de contexte au lieu de 75 000 mesurés sans
+   isolation) — et lancé SANS `ANTHROPIC_API_KEY` dans son environnement,
+   qui prendrait le pas sur l'abonnement. Jamais `--bare` : il ignore
+   l'abonnement et exige une clé.
+   Payé le 2026-09-23 : la première version appelait l'API avec la clé du
+   `.env` — la même que celle du site — et l'a vidée en dix tours.
+   Le banc consomme la limite HEBDOMADAIRE du forfait, surtout par le juge ;
+   il affiche après chaque cas l'équivalent API de ce qu'il a coûté, pour
+   décider en connaissance de cause avant de relancer. */
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-for (const f of [".env.local", ".env"]) {
-  if (!existsSync(f)) continue;
-  for (const line of readFileSync(f, "utf8").split("\n")) {
-    const m = /^([A-Z_]+)=(.*)$/.exec(line.trim());
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
-  }
-}
-const CLE = process.env.ANTHROPIC_TEST_KEY || process.env.ANTHROPIC_API_KEY || "";
-if (!CLE) {
-  console.error("ANTHROPIC_TEST_KEY absent — rien à faire.");
-  process.exit(1);
-}
-
 const arg = (nom) => {
   const i = process.argv.indexOf(nom);
   return i > 0 ? process.argv[i + 1] : "";
 };
-/* Par défaut, le modèle et les efforts de l'écran (MODELE, ROLES) : le
-   banc mesure ce que l'utilisateur obtiendra, pas un autre circuit. */
+/* Le modèle et les efforts de l'écran (MODELE, ROLES) : le banc mesure ce
+   que l'utilisateur obtiendra. Le juge est en effort max — la demande de
+   Gabriel — sauf `--effort-juge`, pour ménager la limite hebdomadaire. */
 const { MODELE, ROLES } = await import("../src/meta.js");
 const REDACTEUR = arg("--rédacteur") || MODELE;
-const JUGE = "claude-opus-5-5";
+const JUGE = MODELE;
+const EFFORT_JUGE = arg("--effort-juge") || "max";
 /* Hors du dépôt : un rapport de banc est une mesure du jour, pas une
    source de vérité à suivre dans git. */
 const SORTIE = arg("--sortie") || join(tmpdir(), "banc-opus55.json");
 
 const { techniqueOf } = await import("../src/techniques.js");
-const { callClaude } = await import("../src/api.js");
+import { spawn } from "node:child_process";
+import { mkdtempSync } from "node:fs";
 const { parseJson } = await import("../src/meta.js");
 const { runVerifiedGeneration } = await import("../src/generate.js");
 const o55 = await import("../src/opus55.js");
@@ -72,7 +71,7 @@ if (GUIDE.length < 5000 || !/Opus 5\.5/.test(GUIDE)) {
   console.error(`Le guide n'a pas pu être relu à la source (${GUIDE.length} car.) — le juge n'aurait rien contre quoi mesurer.`);
   process.exit(1);
 }
-console.log(`Guide relu : ${GUIDE.length} caractères. Rédacteur ${REDACTEUR}, juge ${JUGE} (effort max).`);
+console.log(`Guide relu : ${GUIDE.length} caractères. Rédacteur ${REDACTEUR}, juge ${JUGE} (effort ${EFFORT_JUGE}), via l'abonnement (claude -p).`);
 
 /* Les utilisateurs fictifs. `attendu` est ce qu'un humain attendrait —
    donné au juge comme repère, jamais au rédacteur. `sait` est ce que
@@ -135,8 +134,54 @@ const CAS = [
 const choisis = (arg("--cas") || "").split(",").filter(Boolean);
 const aJouer = choisis.length ? CAS.filter((c) => choisis.includes(c.id)) : CAS;
 
-const demander = async (convo, model, maxTokens, effort) =>
-  (await callClaude(convo, { apiKey: CLE, model, maxTokens, ...(model === MODELE && effort ? { effort } : {}) })).text;
+/* ---------- un appel = un `claude -p` isolé, sur l'abonnement ----------
+   Un dossier vide comme répertoire de travail (aucun CLAUDE.md de projet),
+   l'environnement débarrassé de toute variable ANTHROPIC_*, et les options
+   qui retirent tout ce que Claude Code ajoute d'ordinaire. */
+const VIDE = mkdtempSync(join(tmpdir(), "banc-opus55-"));
+const SYSTEME = "Tu réponds au dernier message de l'utilisateur, en suivant exactement ses consignes de forme.";
+const ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("ANTHROPIC_")));
+let equivalentApi = 0;
+
+function claudeP(texte, { model = MODELE, effort }) {
+  const args = [
+    "-p", "--model", model, "--tools", "", "--disable-slash-commands",
+    "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--setting-sources", "",
+    "--no-session-persistence", "--system-prompt", SYSTEME, "--output-format", "json",
+    ...(effort ? ["--effort", effort] : []),
+  ];
+  return new Promise((resolve, reject) => {
+    const enfant = spawn("claude", args, { cwd: VIDE, env: ENV });
+    let out = "";
+    let err = "";
+    enfant.stdout.on("data", (d) => (out += d));
+    enfant.stderr.on("data", (d) => (err += d));
+    enfant.on("error", reject);
+    enfant.on("close", (code) => {
+      try {
+        const r = JSON.parse(out);
+        equivalentApi += Number(r.total_cost_usd) || 0;
+        if (r.is_error) return reject(new Error(`claude -p : ${String(r.result).slice(0, 200)}`));
+        resolve(String(r.result || ""));
+      } catch {
+        reject(new Error(`claude -p (code ${code}) : ${(err || out).slice(0, 300)}`));
+      }
+    });
+    enfant.stdin.end(texte);
+  });
+}
+
+/* Une conversation de plusieurs tours se remet à plat : `claude -p` ne
+   reçoit qu'un message. Le rédacteur voit l'échange entier, balisé, et
+   répond au dernier tour — c'est la seule différence avec l'écran, qui
+   envoie les tours séparés à l'API. */
+const aplatir = (convo) =>
+  convo.length === 1
+    ? String(convo[0].content)
+    : "Voici notre échange jusqu'ici. Réponds uniquement au DERNIER message de l'utilisateur, comme à ce point de la conversation.\n\n" +
+      convo.map((m) => `<${m.role === "user" ? "utilisateur" : "toi"}>\n${m.content}\n</${m.role === "user" ? "utilisateur" : "toi"}>`).join("\n\n");
+
+const demander = (convo, model, _maxTokens, effort) => claudeP(aplatir(convo), { model, effort });
 
 async function jouer(cas) {
   const journal = [];
@@ -185,9 +230,7 @@ async function jouer(cas) {
   return { questions, answers, prompt: run.text, check: run.check, journal };
 }
 
-/* Le juge : Opus 5.5 en effort max, réflexion adaptative (omise : il
-   pense toujours), en flux — un effort max peut penser plusieurs minutes
-   et un appel non diffusé tomberait sur le délai d'en-têtes. */
+/* Le juge : Opus 5.5, par `claude -p` comme le reste. */
 async function juger(cas, res) {
   const consigne =
     "Tu es un juge de conformité, strict et littéral. Voici le guide officiel d'Anthropic sur la manière de prompter Claude Opus 5.5, en entier :\n\n<guide>\n" +
@@ -208,50 +251,11 @@ async function juger(cas, res) {
     '"questions_ok":true,"questions_commentaire":"…","verdict":"une phrase"}\n' +
     "`conforme` n'est vrai que si `violations` est vide. Sois exigeant : un détail qui affaiblit une recommandation est une violation.";
 
-  const reponse = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-api-key": CLE, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({
-      model: JUGE,
-      max_tokens: 64000,
-      stream: true,
-      output_config: { effort: "max" },
-      messages: [{ role: "user", content: consigne }],
-    }),
-  });
-  if (!reponse.ok) throw new Error(`juge ${reponse.status} : ${await reponse.text()}`);
-  let texte = "";
-  let tampon = "";
-  let arret = null;
-  const lecteur = reponse.body.getReader();
-  const dec = new TextDecoder();
-  for (;;) {
-    const { done, value } = await lecteur.read();
-    if (done) break;
-    tampon += dec.decode(value, { stream: true });
-    const lignes = tampon.split("\n");
-    tampon = lignes.pop() ?? "";
-    for (const l of lignes) {
-      if (!l.startsWith("data:")) continue;
-      try {
-        const ev = JSON.parse(l.slice(5));
-        if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") texte += ev.delta.text;
-        if (ev.type === "message_delta" && ev.delta?.stop_reason) arret = ev.delta;
-        if (ev.type === "error") throw new Error(ev.error?.message);
-      } catch (e) {
-        if (e.message && !/JSON/.test(e.message)) throw e;
-      }
-    }
-  }
-  /* Un refus du juge se nomme : le guide prévient qu'une demande de
-     « montrer son raisonnement » est une catégorie de signalement, et le
-     cas piégé en CONTIENT une — citée dans l'idée qu'on lui fait lire. */
-  if (arret?.stop_reason === "refusal")
-    throw new Error(`juge : refus (${arret.stop_details?.category ?? "catégorie inconnue"})`);
+  const texte = await claudeP(consigne, { model: JUGE, effort: EFFORT_JUGE });
   try {
     return parseJson(texte);
   } catch {
-    throw new Error(`juge : réponse sans JSON (${arret?.stop_reason ?? "?"}) — ${texte.slice(0, 200)}`);
+    throw new Error(`juge : réponse sans JSON — ${texte.slice(0, 200)}`);
   }
 }
 
@@ -285,5 +289,6 @@ for (const r of resultats) {
   for (const x of v.violations || []) console.log(`   ✗ ${x.regle} — « ${x.citation} » → ${x.correction}`);
   console.log(`   verdict : ${v.verdict}`);
 }
-console.log(`\n${rouges === 0 ? "Banc au vert." : `${rouges} cas à reprendre.`} Détail : ${SORTIE}`);
+console.log(`\nÉquivalent API consommé sur le forfait : ${equivalentApi.toFixed(2)} $ (non facturé : c'est l'abonnement qui paie, en limite hebdomadaire).`);
+console.log(`${rouges === 0 ? "Banc au vert." : `${rouges} cas à reprendre.`} Détail : ${SORTIE}`);
 process.exit(rouges === 0 ? 0 : 1);

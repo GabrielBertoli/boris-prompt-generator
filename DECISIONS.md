@@ -1046,11 +1046,44 @@ générations réelles du harnais passent désormais par Opus 5.5 + effort
 
 ---
 
+## 34. Abonnement d'abord : aucun agent ne dépense la clé API sans qu'on le demande
+
+Le 2026-09-23, le banc du § 31 a vidé le crédit prépayé de la clé du `.env`
+— qui est aussi la clé partagée du site. Gabriel est en abonnement Max ; il
+n'attendait aucune dépense d'API. Sa consigne : « que n'importe quelle carte,
+si je ne le spécifie pas, utilise mon abonnement et pas ma clé API ».
+
+**Constaté d'abord :** aucune session ni aucune carte ne tournait sur une clé
+— ni variable d'environnement, ni profil shell, ni réglage Claude Code, ni
+`env` sur les 31 cartes de la tour. Ce qui dépense une clé, ce sont les
+SCRIPTS qu'un agent lance et qui la lisent dans un fichier. La règle vise
+donc les agents, là où tous la lisent : `~/.claude/CLAUDE.md` (après le bloc
+oh-my-claudecode, qui se régénère), le `CLAUDE.md` racine de `L'Oreal`, et
+`~/.codex/AGENTS.md`.
+
+**Et dans ce dépôt, elle est câblée :**
+- `npm run banc` ne connaît plus de clé : chaque appel est un `claude -p`
+  isolé (aucun outil, skill, MCP ni réglage ; dossier vide ; prompt système
+  neutre ; aucune variable `ANTHROPIC_*` transmise). Mesuré : 491 jetons de
+  contexte au lieu de 75 000 sans isolation. Jamais `--bare`, qui ignore
+  l'abonnement. Un cas complet (juge en effort `low`) : 0,26 $ d'équivalent
+  API, pris sur le forfait.
+- `npm run verify` ne lit plus la clé d'office : ses générations réelles
+  demandent `VERIFY_API=1`.
+- Le site, lui, garde sa clé — il appelle l'API depuis le navigateur pour ses
+  utilisateurs, et un abonnement Max ne peut pas servir une application à des
+  tiers. Quand elle est à sec, l'écran le dit en français et indique le geste
+  (coller sa propre clé), au lieu de l'erreur brute de l'API.
+
+---
+
 ## Reste à la main de Gabriel
 
-- **Recharger le crédit Anthropic** de la clé partagée de l'atelier (la même
-  que la clé de test) : épuisée le 2026-09-23 pendant le banc Opus 5.5 — sans
-  elle, l'atelier ne génère plus avec sa propre clé.
+- **Le crédit de la clé partagée de l'atelier** est épuisé depuis le
+  2026-09-23 (banc Opus 5.5) et Gabriel ne peut pas le recharger pour
+  l'instant : le site ne génère qu'avec la clé personnelle d'un visiteur,
+  collée dans Réglages. Recharger (platform.claude.com → Billing) rétablit
+  la clé commune.
 - Vérifier un domaine d'envoi chez Resend, pour que le lien de
   réinitialisation parte vers de vraies adresses.
 - Valider le déploiement en production (déposé, jamais promu par l'agent).

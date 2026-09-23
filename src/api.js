@@ -244,6 +244,12 @@ export async function callClaude(
 
 function describe(status, detail) {
   const suffix = detail ? ` — ${detail}` : "";
+  /* Le crédit prépayé du compte de la clé est vide (vécu le 2026-09-23 sur
+     la clé de l'atelier). L'erreur brute, en anglais, parlait de « Plans &
+     Billing » à quelqu'un qui n'a pas la main sur ce compte ; ce qu'il peut
+     faire, lui, c'est coller sa propre clé. */
+  if (/credit balance is too low/i.test(detail))
+    return "La clé utilisée n'a plus de crédit Anthropic. Colle ta propre clé API dans Réglages pour continuer — elle reste dans ce navigateur.";
   if (status === 401) return "Clé API refusée (401). Vérifie-la dans les réglages.";
   if (status === 403) return `Clé sans droit d'accès à ce modèle (403)${suffix}`;
   if (status === 404) return `Modèle introuvable (404)${suffix}`;
