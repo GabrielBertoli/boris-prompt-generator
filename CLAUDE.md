@@ -103,6 +103,13 @@ Tous les parcours passent en preview, assertions au vert bundle et mail compris 
   1700 — tout dans `src/gauntlet.js`, et nulle part ailleurs. Un chiffre de
   longueur recopié à l'écran ou dans une assertion est une bombe à retardement
   VERTE : sept l'ont été, tous supprimés ce jour-là.
+- **`src/` a un second client depuis le 2026-09-23 : la Tour Unifiée.** Son
+  bouton « ✨ Générer prompt » (éditeur de carte, `Tour-Unifiee/lib/prompting.js`)
+  importe `techniques.js`, `generate.js` et `meta.js` tels quels et rejoue le
+  circuit de l'écran sur l'abonnement (`claude -p`, profil `Claude-fr`).
+  Renommer ou retirer `TECHNIQUES`, `techniqueOf`, `runVerifiedGeneration`,
+  `MODELE`, `ROLES`, `contexteNeuf`, `parseJson` ou `normalizeNote` casse ce
+  bouton sans qu'aucune assertion d'ici ne le voie.
 - **Trois instruments de vérification**, et le skill `/verify` du dépôt
   (`.claude/skills/verify/SKILL.md`) dit lequel prouve quoi :
   1. `npm run verify` — **424 assertions en local** au 2026-09-23, 408 sans
