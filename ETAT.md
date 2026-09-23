@@ -82,6 +82,15 @@ ne touche la clé que sur `VERIFY_API=1`, et le site dit en français quand sa
 clé est à sec. Règle posée pour toutes les cartes (`~/.claude/CLAUDE.md`,
 `CLAUDE.md` racine, `~/.codex/AGENTS.md`).
 
+**Lancement de la carte réparé** (2026-09-23, ~09 h) : la Tour Unifiée
+lançait `codex -m claude-opus-5-5` — la carte y restait rattachée au profil
+`codex-machine`, dont le moteur prime. Profil passé à `Claude-fr`
+(abonnement Max), effort `xhigh`, prompt de carte remis à jour dans les deux
+tours. Et le lanceur de la Tour Unifiée passait le prompt sans `--` : le bloc
+« Sources déclarées » commençant par `---` était pris pour une option par
+codex ET claude. Corrigé là-bas (`lib/harnais.js`, sauvegarde
+`.bak-avant-separateur-prompt-2026-09-23`, test `36-separateur-prompt`).
+
 Ce qui reste :
 
 1. Recharger le crédit (Gabriel), puis `npm run banc` une fois en entier pour
