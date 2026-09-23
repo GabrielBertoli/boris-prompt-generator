@@ -1,7 +1,8 @@
 # Boris-Prompt-Generator
 
 Programme de développement piloté par la Dev Control Tower (session
-« Boris-Prompt-Generator », sonnet · high). Ouvert le 2026-08-01.
+« Boris-Prompt-Generator », carte passée en claude-opus-5-5 · xhigh le
+2026-09-23, à la demande de Gabriel). Ouvert le 2026-08-01.
 
 ## Ce qu'on fait ici
 
