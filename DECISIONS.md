@@ -1004,6 +1004,48 @@ pour tous les modèles. Relus sur la page officielle
 
 ---
 
+## 33. Tout en Opus 5.5, un effort par rôle — et le juge en contexte neuf
+
+Demande de Gabriel le 2026-09-23 : « que tous les modèles soient en Opus
+5.5 avec le bon effort, ainsi que le juge ». Le choix des modèles disparaît
+des réglages ; il est affiché, pas caché (`MODELE`, `ROLES` dans `meta.js`).
+
+**Les efforts.** Opus 5.5 n'a pas d'autre réglage de profondeur (il refuse
+`thinking: disabled`) et son défaut est `medium`. Questions : `medium` — un
+JSON de deux lignes. Rédaction : `high` — c'est là que la fidélité se gagne,
+le banc du § 31 l'a montré. Juge : `high` — il tourne après chaque version
+et l'écran l'attend ; `max` reste au banc, où la lenteur ne coûte rien.
+L'effort part dans `output_config.effort` (assertion sur le corps envoyé).
+
+**La règle qu'il a fallu déplacer.** « Le juge n'est jamais le modèle qui a
+produit — angles morts corrélés » ne peut plus tenir par le modèle. Elle
+tient désormais par le CONTEXTE : le juge ne reçoit plus la conversation où
+il a écrit le prompt (tentatives, réparations, et le fait d'en être
+l'auteur), mais un message neuf — la méthode et l'idée, les précisions de
+l'utilisateur (réponses, barre, corrections demandées), puis le prompt
+présenté comme l'œuvre d'un autre (`contexteNeuf`). C'est la règle du
+critique « au contexte neuf » du gantelet, appliquée à l'atelier lui-même.
+Six assertions la tiennent. Ce qu'elle ne rend pas : un second modèle aux
+angles morts différents — c'est le prix du choix, et il est écrit ici.
+
+**Le silence.** À effort `high`, Opus 5.5 pense avant son premier mot, sans
+rien afficher : le délai de silence toléré passe de 60 s à 150 s pour les
+modèles qui pensent toujours (`STALL_MS_PENSEUR`) ; le plafond absolu de
+300 s ne bouge pas.
+
+**Ce qui disparaît.** Le champ `redacteur` du § 31 (plus rien à imposer
+quand tout est Opus 5.5), les sélecteurs de modèle, l'avertissement « juge =
+rédacteur ». Les réglages enregistrés avec `writer` / `judge` sont lus sans
+erreur, ces deux clés ignorées. `PRICES` garde les cinq modèles : le
+compteur reste juste si un modèle revient.
+
+**Non éprouvé en réel** : le crédit Anthropic est épuisé. Le corps envoyé
+est vérifié (effort, pas de réglage de réflexion, marge de jetons), les
+générations réelles du harnais passent désormais par Opus 5.5 + effort
+`high` — elles tourneront à la recharge.
+
+---
+
 ## Reste à la main de Gabriel
 
 - **Recharger le crédit Anthropic** de la clé partagée de l'atelier (la même

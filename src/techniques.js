@@ -18,7 +18,6 @@
 
    Le contrat, dans l'ordre où l'atelier s'en sert :
      id, nom, resume, quand      — l'identité, montrée au choix
-     redacteur (facultatif)      — le modèle qui écrit, s'il est imposé
      limiteDefaut/Min/hardLimit  — la longueur, et son plafond dur
      noteLimite                  — la phrase sous son curseur, aux réglages
      capLimit(n)                 — rabat un réglage dans les bornes
@@ -296,14 +295,6 @@ const OPUS55 = {
   sortie: `un prompt d'un seul tenant, autour de ${Math.round((opus55.VISEE.lo + opus55.VISEE.hi) / 2)} mots`,
   cleReglage: "charLimitOpus55",
   noteLimite: `Le message se mesure d'abord en MOTS — ${opus55.VISEE.lo} à ${opus55.VISEE.hi} — et une tâche simple tient dans le bas de la fourchette : le plafond en caractères n'arrête qu'un débordement franc.`,
-  /* Le rédacteur de CETTE technique, au-dessus du réglage « Produit le
-     prompt ». Mesuré au banc du 2026-09-23 (huit utilisateurs fictifs,
-     juge Opus 5.5 en effort max) : rédigés par Sonnet 5, trois cas sur
-     huit posaient une question superflue et les notes allaient de 4,5 à
-     9,5 ; rédigés par Opus 5.5, les huit séries de questions étaient
-     justes et les notes allaient de 7,5 à 10. Un prompt pour Opus 5.5 se
-     fait écrire par Opus 5.5 — le guide qu'il applique est le sien. */
-  redacteur: "claude-opus-5-5",
   credit: "Tirée du guide d'Anthropic « Getting the most out of Opus 5.5 » (claude.dev, 22 septembre 2026).",
 
   hardLimit: opus55.HARD_LIMIT,

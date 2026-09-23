@@ -118,16 +118,66 @@ export function parseJson(text) {
   return JSON.parse(clean.slice(start, end + 1));
 }
 
-/* Modèles proposés dans les réglages.
-   Production → Sonnet 5. Jugement → Opus 5 : le juge n'est jamais le modèle
-   qui a produit, les angles morts seraient corrélés (règle du playbook). */
-export const MODELS = [
-  { id: "claude-sonnet-5", label: "Sonnet 5", note: "rapide, produit" },
-  { id: "claude-opus-5-5", label: "Opus 5.5", note: "profond, pense toujours, moins cher qu'Opus 5" },
-  { id: "claude-opus-5", label: "Opus 5", note: "profond, tranche" },
-  { id: "claude-fable-5", label: "Fable 5", note: "le plus fort, le plus cher" },
-  { id: "claude-haiku-4-5", label: "Haiku 4.5", note: "économique" },
-];
+/* UN modèle, imposé, et un EFFORT par rôle (demande de Gabriel, le
+   2026-09-23 : « que tous les modèles soient en Opus 5.5 avec le bon
+   effort, ainsi que le juge »). Le choix des modèles a disparu des
+   réglages : il n'y a plus rien à choisir.
+   L'effort est le seul réglage de profondeur d'Opus 5.5 — il refuse
+   `thinking: disabled` — et son défaut est `medium`. Chaque rôle a le
+   sien, parce qu'ils ne demandent pas la même chose :
+   - les questions rendent un JSON de deux lignes : le défaut suffit ;
+   - la rédaction est l'endroit où la fidélité se gagne ou se perd (le
+     banc du § 31 l'a montré) : `high` ;
+   - le juge tourne après CHAQUE version, l'écran l'attend : `high` et non
+     `max`, qui est réservé au banc, où la lenteur ne coûte rien.
+   La règle du playbook « le juge n'est jamais le modèle qui a produit »
+   ne peut plus tenir par le modèle : elle tient par le CONTEXTE. Le juge
+   ne relit plus la conversation où il a écrit le prompt ; il reçoit un
+   message neuf où le prompt est présenté comme l'œuvre d'un autre
+   (`contexteNeuf`). DECISIONS § 33. */
+export const MODELE = "claude-opus-5-5";
+
+export const MODELS = [{ id: MODELE, label: "Opus 5.5", note: "pense toujours, dose par l'effort" }];
+
+export const ROLES = {
+  questions: { effort: "medium", nom: "Questions" },
+  redaction: { effort: "high", nom: "Rédaction" },
+  juge: { effort: "high", nom: "Juge" },
+};
+
+/* Le message du juge, en contexte neuf : la méthode et l'idée (le premier
+   message, sans l'instruction de l'étape 1 qui lui demanderait des
+   questions), ce que l'utilisateur a précisé depuis (réponses, barre,
+   corrections demandées), puis le prompt — présenté comme écrit par un
+   autre. Rien de la conversation de rédaction : ni les tentatives, ni les
+   réparations, ni le fait d'en être l'auteur. */
+export function contexteNeuf({ convo, texte, etape1, audit }) {
+  const tours = Array.isArray(convo) ? convo : [];
+  let base = String(tours[0]?.content || "");
+  if (etape1 && base.includes(etape1)) base = base.replace(etape1, "").trimEnd();
+  const precisions = [];
+  for (const m of tours.slice(1)) {
+    if (m.role !== "user") continue;
+    const c = String(m.content || "");
+    if (c.startsWith("RÉPONSES :")) precisions.push(c.split("\n\nÉTAPE 2")[0]);
+    for (const l of c.split("\n")) if (/^(LA BARRE RETENUE|MOITIÉ MESURABLE) :/.test(l)) precisions.push(l);
+    if (c.startsWith("CORRECTION DEMANDÉE :")) precisions.push(c.split("\n\nApplique-la")[0]);
+  }
+  const prompt =
+    texte || String([...tours].reverse().find((m) => m.role === "assistant")?.content || "");
+  return [
+    {
+      role: "user",
+      content:
+        base +
+        (precisions.length ? "\n\nCE QUE L'UTILISATEUR A PRÉCISÉ DEPUIS :\n" + precisions.join("\n\n") : "") +
+        "\n\nPROMPT À JUGER — écrit par un autre agent, tu ne l'as pas rédigé et tu n'as rien à en défendre :\n---\n" +
+        prompt +
+        "\n---\n\n" +
+        audit,
+    },
+  ];
+}
 
 /* Tarifs Anthropic en $ par million de jetons, relus le 2026-09-23 sur
    la page officielle (platform.claude.com/docs/en/about-claude/pricing).
@@ -175,8 +225,6 @@ export function formatCost(dollars) {
   return dollars.toFixed(digits).replace(".", ",") + " $";
 }
 
-export const DEFAULT_WRITER = "claude-sonnet-5";
-export const DEFAULT_JUDGE = "claude-opus-5";
 
 /* ---------- reprendre un fil ----------
 

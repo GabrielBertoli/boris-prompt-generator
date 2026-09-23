@@ -162,7 +162,7 @@ const RAW_CHAPITRES = [
     titre: "La note du juge",
     sert: "Une note sur 10 qui dit ce que vaut le prompt — pas ce qu'il pèse.",
     points: [
-      "Un second modèle, différent de celui qui a écrit, relit le prompt et le note. Différent volontairement : deux modèles identiques ont les mêmes angles morts.",
+      "Un juge relit le prompt et le note. C'est le même modèle que celui qui l'a écrit (Opus 5.5), mais il ne relit pas la conversation où le prompt est né : il le reçoit comme l'œuvre d'un autre, sans les essais ni les réparations, et n'a donc rien à défendre.",
       "Six critères, chacun sur 10 : la structure, les événements réels, les garde-fous, les contrôles de réussite, la fin du travail, et l'économie du texte. « ⋯ » les déplie.",
       "La note globale n'est pas la moyenne : elle ne dépasse jamais de plus de 2 points le plus faible des six. Un prompt sans moyen de vérifier le résultat n'est pas un bon prompt, même si tout le reste est excellent.",
       "La jauge porte son barème peint à demeure : rouge sous 6, orange de 6 à 8, vert au-delà. On voit donc où tombe un 7,5 et de combien il s'en faut.",
@@ -197,12 +197,12 @@ const RAW_CHAPITRES = [
   {
     cle: "reglages",
     titre: "Les réglages",
-    sert: "Ton code, ton adresse, ta clé, et les deux modèles.",
+    sert: "Ton code, ton adresse, ta clé, et la longueur du prompt.",
     points: [
       "Changer ton code : à faire dès la première visite.",
       "Enregistrer ton adresse e-mail : elle servira le jour où la réinitialisation par mail sera branchée. Elle n'est utilisée pour rien d'autre.",
       "La clé API : l'atelier en fournit une, tu n'as rien à faire. Si tu colles la tienne, elle prend le dessus et la consommation part sur ton compte.",
-      "Les deux modèles : celui qui écrit et celui qui juge. Le juge doit rester différent de celui qui écrit — c'est tout l'intérêt d'un second avis.",
+      "Les modèles ne se choisissent plus : tout tourne sur Opus 5.5, avec un effort adapté à chaque rôle — moyen pour les questions, élevé pour la rédaction et pour le juge. Ils sont affichés dans les réglages, pour qu'on sache ce qui tourne.",
       "La longueur maximale du prompt. Elle ne monte pas au-dessus de 3950 caractères, et ce n'est pas réglable : au-delà, la plupart des agents tronquent le texte sans prévenir.",
     ],
   },

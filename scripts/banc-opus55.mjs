@@ -35,10 +35,10 @@ const arg = (nom) => {
   const i = process.argv.indexOf(nom);
   return i > 0 ? process.argv[i + 1] : "";
 };
-/* Par défaut, le rédacteur que la technique impose à l'écran : le banc
-   mesure ce que l'utilisateur obtiendra, pas un autre circuit. */
-const REDACTEUR_IMPOSE = (await import("../src/techniques.js")).techniqueOf("opus55").redacteur;
-const REDACTEUR = arg("--rédacteur") || REDACTEUR_IMPOSE || "claude-sonnet-5";
+/* Par défaut, le modèle et les efforts de l'écran (MODELE, ROLES) : le
+   banc mesure ce que l'utilisateur obtiendra, pas un autre circuit. */
+const { MODELE, ROLES } = await import("../src/meta.js");
+const REDACTEUR = arg("--rédacteur") || MODELE;
 const JUGE = "claude-opus-5-5";
 /* Hors du dépôt : un rapport de banc est une mesure du jour, pas une
    source de vérité à suivre dans git. */
@@ -135,13 +135,14 @@ const CAS = [
 const choisis = (arg("--cas") || "").split(",").filter(Boolean);
 const aJouer = choisis.length ? CAS.filter((c) => choisis.includes(c.id)) : CAS;
 
-const demander = async (convo, model, maxTokens) => (await callClaude(convo, { apiKey: CLE, model, maxTokens })).text;
+const demander = async (convo, model, maxTokens, effort) =>
+  (await callClaude(convo, { apiKey: CLE, model, maxTokens, ...(model === MODELE && effort ? { effort } : {}) })).text;
 
 async function jouer(cas) {
   const journal = [];
   /* Étape 1, comme l'écran : même message, même budget. */
   const first = { role: "user", content: O.buildMeta(LIMITE) + "\n\nIDÉE :\n" + cas.idee + "\n\n" + O.etape1.instruction() };
-  const raw1 = await demander([first], REDACTEUR, 1200);
+  const raw1 = await demander([first], REDACTEUR, 1200, ROLES.questions.effort);
   let questions;
   try {
     questions = (parseJson(raw1).questions || []).slice(0, 3);
@@ -172,7 +173,7 @@ async function jouer(cas) {
   }
 
   const run = await runVerifiedGeneration({
-    ask: (convo) => demander(convo, REDACTEUR, Math.min(16000, Math.max(2000, Math.ceil(LIMITE / 2) + 1200))),
+    ask: (convo) => demander(convo, REDACTEUR, Math.min(16000, Math.max(2000, Math.ceil(LIMITE / 2) + 1200)), ROLES.redaction.effort),
     baseConvo: history,
     instruction: O.etape2Instruction({ limit: LIMITE, questions, answers }),
     limit: LIMITE,

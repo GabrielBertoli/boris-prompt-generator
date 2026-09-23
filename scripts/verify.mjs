@@ -659,13 +659,44 @@ section("L'oracle de la méthode Opus 5.5");
   assert("Opus 5.5 est reconnu comme pensant toujours", api.PENSE_TOUJOURS.test("claude-opus-5-5"));
   /* La méthode impose son rédacteur (mesuré au banc) ; il doit exister au
      choix des modèles, sinon l'écran afficherait un identifiant nu. */
-  assert("la méthode Opus 5.5 est écrite par Opus 5.5", O.redacteur === "claude-opus-5-5", O.redacteur);
-  assert("et c'est la seule qui impose le sien", (await import("../src/techniques.js")).TECHNIQUES.filter((x) => x.redacteur).length === 1);
+  /* Tout en Opus 5.5, un effort par rôle (demande de Gabriel, 2026-09-23). */
+  const { MODELE, ROLES, contexteNeuf } = await import("../src/meta.js");
+  assert("un seul modèle, Opus 5.5", MODELE === "claude-opus-5-5" && MODELS.length === 1 && MODELS[0].id === MODELE);
+  assert(
+    "chaque rôle a un effort que l'API connaît",
+    ["questions", "redaction", "juge"].every((r) => ["low", "medium", "high", "xhigh", "max"].includes(ROLES[r]?.effort)),
+    JSON.stringify(ROLES)
+  );
+  assert("aucune technique n'impose plus son propre rédacteur", (await import("../src/techniques.js")).TECHNIQUES.every((x) => !("redacteur" in x)));
+
+  /* Le juge en contexte neuf : c'est ce qui remplace « le juge n'est pas
+     le modèle qui a produit ». Il ne doit voir ni l'instruction de l'étape
+     1, ni les tentatives, et il doit voir les précisions de l'utilisateur. */
+  {
+    const e1 = O.etape1.instruction();
+    const convo = [
+      { role: "user", content: O.buildMeta(O.limiteDefaut) + "\n\nIDÉE :\nmigrer billing-api\n\n" + e1 },
+      { role: "assistant", content: '{"questions":["Où est le dépôt ?"]}' },
+      { role: "user", content: "RÉPONSES :\nQ1 : Où est le dépôt ?\nR : github.com/acme/billing-api\n\nÉTAPE 2 — Écris MAINTENANT…" },
+      { role: "assistant", content: "brouillon raté" },
+      { role: "user", content: "ASSERTION ÉCHOUÉE : longueur" },
+      { role: "assistant", content: bon },
+      { role: "user", content: "CORRECTION DEMANDÉE :\najoute forcer un push\n\nApplique-la au prompt ci-dessus…" },
+    ];
+    const neuf = contexteNeuf({ convo, texte: bon, etape1: e1, audit: O.auditInstruction() });
+    const c = neuf[0].content;
+    assert("le juge reçoit UN message neuf", neuf.length === 1 && neuf[0].role === "user");
+    assert("sans l'instruction de l'étape 1", !c.includes(e1));
+    assert("sans les tentatives ratées ni les réparations", !c.includes("brouillon raté") && !c.includes("ASSERTION ÉCHOUÉE"));
+    assert("avec les réponses et les corrections de l'utilisateur", c.includes("github.com/acme/billing-api") && c.includes("ajoute forcer un push"));
+    assert("avec le prompt, présenté comme l'œuvre d'un autre", c.includes(bon) && /écrit par un autre agent/.test(c));
+    assert("et la grille du juge à la fin", c.trimEnd().endsWith(O.auditInstruction().trimEnd()));
+  }
   assert("Opus 5 ne l'est pas", !api.PENSE_TOUJOURS.test("claude-opus-5"));
 
   /* Le corps réellement envoyé, lu sur un fetch intercepté : c'est lui que
      l'API refuserait, pas une constante. */
-  const envoye = async (model) => {
+  const envoye = async (model, effort) => {
     const vrai = globalThis.fetch;
     let corps = null;
     globalThis.fetch = async (_url, init) => {
@@ -673,7 +704,7 @@ section("L'oracle de la méthode Opus 5.5");
       throw new Error("intercepté");
     };
     try {
-      await api.callClaude([{ role: "user", content: "x" }], { apiKey: "k", model, maxTokens: 1200 });
+      await api.callClaude([{ role: "user", content: "x" }], { apiKey: "k", model, maxTokens: 1200, effort });
     } catch {
       /* attendu : l'appel est intercepté */
     } finally {
@@ -681,11 +712,13 @@ section("L'oracle de la méthode Opus 5.5");
     }
     return corps;
   };
-  const c55 = await envoye("claude-opus-5-5");
+  const c55 = await envoye("claude-opus-5-5", "high");
   assert("à Opus 5.5, aucun réglage de réflexion n'est envoyé", c55 && !("thinking" in c55), JSON.stringify(c55?.thinking));
   assert("et la place de sa réflexion s'ajoute au budget", c55?.max_tokens === 1200 + api.MARGE_REFLEXION, `${c55?.max_tokens}`);
+  assert("l'effort du rôle part dans output_config", c55?.output_config?.effort === "high", JSON.stringify(c55?.output_config));
   const c5 = await envoye("claude-sonnet-5");
   assert("aux autres, la réflexion reste coupée et le budget inchangé", c5?.thinking?.type === "disabled" && c5?.max_tokens === 1200);
+  assert("et sans effort demandé, aucun output_config", !("output_config" in c5));
 }
 
 /* ---------- 1 bis 3. la note du juge ----------
@@ -1881,7 +1914,8 @@ if (!ANTHROPIC) {
   /* On appelle `callClaude` — celui de l'atelier, flux compris — et non une
      copie du fetch. Le vérificateur a déjà déclaré rouge une boucle qu'il
      avait recopiée : il ne recopie plus rien. */
-  const { callClaude } = await import("../src/api.js");
+  const { callClaude, STALL_MS_PENSEUR } = await import("../src/api.js");
+  const { MODELE: MODELE_ECRAN, ROLES: ROLES_ECRAN } = await import("../src/meta.js");
 
   let deltas = 0;
   let onlyGrows = true;
@@ -1900,7 +1934,10 @@ if (!ANTHROPIC) {
       try {
         const { text, usage } = await callClaude(convo, {
           apiKey: ANTHROPIC,
-          model: "claude-sonnet-5",
+          /* Le modèle et l'effort de l'écran — le harnais éprouve le circuit
+             que l'utilisateur obtient, pas un autre. */
+          model: MODELE_ECRAN,
+          effort: ROLES_ECRAN.redaction.effort,
           maxTokens: 2700,
           onDelta: (partial) => {
             deltas += 1;
@@ -1950,7 +1987,9 @@ if (!ANTHROPIC) {
     assert("le texte ne fait que croître", onlyGrows);
     assert(
       "le premier morceau arrive vite",
-      firstDeltaMs > 0 && firstDeltaMs < 30000,
+      /* Opus 5.5 pense avant son premier mot, en silence : la borne est
+         celle que l'atelier tolère, pas les 30 s d'un modèle sans réflexion. */
+      firstDeltaMs > 0 && firstDeltaMs < STALL_MS_PENSEUR,
       `${(firstDeltaMs / 1000).toFixed(1)} s`
     );
     assert(
@@ -1986,7 +2025,8 @@ if (!ANTHROPIC) {
     ask: async (convo) => {
       const { text } = await callClaude(convo, {
         apiKey: ANTHROPIC,
-        model: "claude-sonnet-5",
+        model: MODELE_ECRAN,
+        effort: ROLES_ECRAN.redaction.effort,
         maxTokens: 1400,
       });
       return text;
@@ -2038,7 +2078,7 @@ if (!ANTHROPIC) {
   const limitH = H.limiteDefaut;
   const runH = await runVerifiedGeneration({
     ask: async (convo) => {
-      const { text } = await callClaude(convo, { apiKey: ANTHROPIC, model: "claude-sonnet-5", maxTokens: 2200 });
+      const { text } = await callClaude(convo, { apiKey: ANTHROPIC, model: MODELE_ECRAN, effort: ROLES_ECRAN.redaction.effort, maxTokens: 2200 });
       return text;
     },
     baseConvo: H.baseConvoFor({
@@ -2079,7 +2119,7 @@ if (!ANTHROPIC) {
   const limitO = O.limiteDefaut;
   const runO = await runVerifiedGeneration({
     ask: async (convo) => {
-      const { text } = await callClaude(convo, { apiKey: ANTHROPIC, model: "claude-opus-5-5", maxTokens: 1600 });
+      const { text } = await callClaude(convo, { apiKey: ANTHROPIC, model: MODELE_ECRAN, effort: ROLES_ECRAN.redaction.effort, maxTokens: 1600 });
       return text;
     },
     baseConvo: O.baseConvoFor({

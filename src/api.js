@@ -63,6 +63,11 @@ export const PENSE_TOUJOURS = /^claude-(fable|mythos|opus-5-5)/;
 export const MARGE_REFLEXION = 16000;
 
 const STALL_MS = 60000; // silence toléré entre deux morceaux
+/* Un modèle qui pense toujours se tait pendant qu'il pense : sa réflexion
+   n'est pas affichée, et le premier mot n'arrive qu'après. À effort
+   `high`, une minute de silence n'est pas une panne. Le plafond absolu,
+   lui, ne bouge pas. */
+export const STALL_MS_PENSEUR = 150000;
 const HARD_MS = 300000; // plafond absolu d'un seul appel
 
 /* Levée quand C'EST L'UTILISATEUR qui arrête, et reconnaissable comme
@@ -78,13 +83,16 @@ export class Arret extends Error {
 
 export async function callClaude(
   messages,
-  { apiKey, model, maxTokens = 4000, system, onDelta, signal } = {}
+  { apiKey, model, maxTokens = 4000, system, onDelta, signal, effort } = {}
 ) {
   if (!apiKey) throw new Error("Aucune clé API — ouvre les réglages et colle la tienne.");
   if (signal?.aborted) throw new Arret();
 
   const payload = { model, max_tokens: maxTokens, messages, stream: true };
   if (system) payload.system = system;
+  /* L'effort du rôle (voir `ROLES` dans meta.js) : sur Opus 5.5, le seul
+     réglage de profondeur. */
+  if (effort) payload.output_config = { effort };
 
   // Réflexion coupée : la longueur de sortie reste prévisible sous max_tokens,
   // et la boucle d'assertions joue déjà le rôle d'auto-correction.
@@ -118,12 +126,13 @@ export async function callClaude(
 
   /* Réarmé à chaque morceau : un modèle lent reste acceptable, un modèle
      muet ne l'est pas. */
+  const silence = PENSE_TOUJOURS.test(model) ? STALL_MS_PENSEUR : STALL_MS;
   const arm = () => {
     clearTimeout(stall);
     stall = setTimeout(() => {
-      expired = `api.anthropic.com n'a plus rien envoyé depuis ${STALL_MS / 1000} s — appel abandonné.`;
+      expired = `api.anthropic.com n'a plus rien envoyé depuis ${silence / 1000} s — appel abandonné.`;
       controller.abort();
-    }, STALL_MS);
+    }, silence);
   };
   const hard = setTimeout(() => {
     expired = `L'appel a dépassé ${HARD_MS / 1000} s — abandonné.`;

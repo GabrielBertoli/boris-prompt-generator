@@ -83,8 +83,12 @@ Tous les parcours passent en preview, assertions au vert bundle et mail compris 
   **un exemple nu se recopie**, contenu compris — on le montre avec l'idée
   d'où il vient ; **une règle se contourne, une phrase fixe se vérifie** (la
   phrase d'arrêt `ARRET`). Elle contredit sciemment Boris et les crochets sur
-  un point : pour 5.5, nommer les arrêts est LA consigne utile. Elle **écrit
-  avec Opus 5.5** quel que soit le réglage (`redacteur` au contrat, mesuré).
+  un point : pour 5.5, nommer les arrêts est LA consigne utile. **Depuis le
+  même jour, TOUT l'atelier tourne sur Opus 5.5** (`MODELE`, `ROLES` dans
+  `meta.js`, § 33) : questions `medium`, rédaction et juge `high`, plus de
+  choix de modèle ; le juge est le même modèle, donc il juge en **contexte
+  neuf** (`contexteNeuf`) — c'est là que tient désormais la règle « le juge
+  n'est pas celui qui a produit ».
   Piège d'API : Opus 5.5 refuse `thinking: disabled` (400) et sa réflexion se
   compte dans `max_tokens` — `PENSE_TOUJOURS` + 16 000 jetons de marge dans
   `api.js`. **La clé de test EST la clé partagée de l'atelier** : un banc qui

@@ -66,6 +66,10 @@ local (`index-CaRJdxMS.js`). Commit `e325d30` et suivant, **non poussés**.
 passe de 3 $ / 15 $ à 2 $ / 10 $, le cache est compté à son vrai prix sur
 les cinq modèles. Les totaux déjà cumulés gardent l'ancien calcul.
 
+**Tout en Opus 5.5 le même jour** (`DECISIONS.md` § 33) : questions en
+effort `medium`, rédaction et juge en `high`, le juge en contexte neuf ; plus
+de choix de modèle dans les réglages.
+
 Ce qui reste :
 
 1. Recharger le crédit (Gabriel), puis `npm run banc` une fois en entier pour

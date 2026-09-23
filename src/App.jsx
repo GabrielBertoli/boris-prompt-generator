@@ -8,9 +8,10 @@ import {
   saveApiKey,
 } from "./api.js";
 import {
-  DEFAULT_JUDGE,
-  DEFAULT_WRITER,
+  MODELE,
   MODELS,
+  ROLES,
+  contexteNeuf,
   bandeDe,
   costOf,
   countChars,
@@ -57,8 +58,6 @@ import {
 const SETTINGS_KEY = "atelier-boris:reglages";
 
 const DEFAULTS = {
-  writer: DEFAULT_WRITER,
-  judge: DEFAULT_JUDGE,
   technique: DEFAULT_TECHNIQUE,
   /* Une limite PAR technique, et non une pour les deux : un prompt Boris
      se mesure en milliers de caractères, un prompt de gantelet en
@@ -81,8 +80,8 @@ function loadSettings() {
     const stored = parsed.charLimit === 3000 ? DEFAULTS.charLimit : parsed.charLimit;
     const gauntlet = techniqueOf("gauntlet");
     return {
-      writer: MODELS.some((m) => m.id === parsed.writer) ? parsed.writer : DEFAULTS.writer,
-      judge: MODELS.some((m) => m.id === parsed.judge) ? parsed.judge : DEFAULTS.judge,
+      /* `writer` et `judge` d'un réglage enregistré avant le 2026-09-23 sont
+         ignorés : le modèle est imposé (MODELE, meta.js). */
       /* Un réglage enregistré avant que la seconde technique existe n'a pas
          de technique : c'est Boris, la seule qu'il pouvait désigner. */
       technique: estTechnique(parsed.technique) ? parsed.technique : DEFAULTS.technique,
@@ -147,10 +146,6 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
      deux-là : plus une seule règle de méthode n'est écrite dans l'écran. */
   const T = useMemo(() => techniqueOf(settings.technique), [settings.technique]);
   const limite = T.capLimit(settings[T.cleReglage]);
-  /* Une technique peut imposer son rédacteur (Opus 5.5 écrit les prompts
-     de la méthode Opus 5.5 — mesuré, voir `techniques.js`). Sinon, le
-     réglage. */
-  const redacteur = T.redacteur || settings.writer;
 
   /* La clé personnelle prime ; à défaut, celle de l'atelier. */
   const apiKey = ownKey || sharedKey || "";
@@ -350,13 +345,14 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   );
 
   const ask = useCallback(
-    async (messages, model, maxTokens, role = "writer") => {
+    async (messages, model, maxTokens, role = "writer", effort) => {
       setStream("");
       try {
         const { text, usage } = await callClaude(messages, {
           apiKey,
           model,
           maxTokens,
+          effort,
           /* Le texte s'affiche pendant qu'il arrive : une minute d'attente
              devient lisible au lieu de ressembler à un blocage. */
           onDelta: setStream,
@@ -399,7 +395,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   /* ---------- cœur : génération sous assertions ---------- */
   const generateVerified = (baseConvo, instruction) =>
     runVerifiedGeneration({
-      ask: (convo) => ask(convo, redacteur, budget(limite)),
+      ask: (convo) => ask(convo, MODELE, budget(limite), "writer", ROLES.redaction.effort),
       baseConvo,
       instruction,
       limit: limite,
@@ -482,7 +478,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     };
 
     try {
-      const raw = await ask([first], redacteur, 1200);
+      const raw = await ask([first], MODELE, 1200, "writer", ROLES.questions.effort);
       const parsed = parseJson(raw);
       const nextHistory = [first, { role: "assistant", content: raw }];
       setHistory(nextHistory);
@@ -611,13 +607,15 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   const juger = async ({ convo, chatCourant, versionCourante, texte }) => {
     setNoteLoading(true);
     try {
-      /* Le juge n'est jamais le modèle qui a produit : angles morts
-         corrélés (règle du playbook). */
+      /* Le juge est le même modèle que le rédacteur : la règle du playbook
+         (angles morts corrélés) tient désormais par le CONTEXTE — un message
+         neuf, où le prompt est l'œuvre d'un autre. Voir `contexteNeuf`. */
       const raw = await ask(
-        [...convo, { role: "user", content: T.auditInstruction() }],
-        settings.judge,
+        contexteNeuf({ convo, texte, etape1: T.etape1.instruction(), audit: T.auditInstruction() }),
+        MODELE,
         1600,
-        "judge"
+        "judge",
+        ROLES.juge.effort
       );
       const parsed = parseJson(raw);
       const verdict = {
@@ -630,7 +628,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
          inconnues rendraient six lignes vides sous une note juste. */
       const n = normalizeNote(
         { ...parsed, pourVersion: versionCourante ?? version },
-        settings.judge,
+        MODELE,
         T.CRITERES
       );
       setAudit(verdict);
@@ -1254,7 +1252,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           <div className="min-w-0 flex-1">
             <div className="eyebrow">Atelier Boris</div>
             <div className="mono truncate text-[11px]" style={{ color: "var(--muted-2)" }}>
-              {redacteur} · juge {settings.judge}
+              {MODELE} · rédaction {ROLES.redaction.effort} · juge {ROLES.juge.effort}
             </div>
           </div>
 
@@ -2050,7 +2048,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
                       d'écart. Ce panneau ne garde que ce qui appelle un
                       GESTE — les failles, qu'on applique en une version de
                       plus, et les hypothèses, qu'on doit connaître. */}
-                  <div className="eyebrow mb-3">Ce que le juge reproche — {settings.judge}</div>
+                  <div className="eyebrow mb-3">Ce que le juge reproche — {MODELS[0].label}, contexte neuf</div>
 
                   {audit.failles?.length ? (
                     <div className="mb-4">
@@ -2655,8 +2653,6 @@ function SettingsSheet({
 }) {
   const [keyDraft, setKeyDraft] = useState(ownKey);
   const [email, setEmail] = useState(user.email || "");
-  const T = techniqueOf(settings.technique);
-  const redacteur = T.redacteur || settings.writer;
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [busy, setBusy] = useState(false);
@@ -2776,49 +2772,16 @@ function SettingsSheet({
           <span className="section-line" />
         </div>
 
-        <label className="field-label" htmlFor="writer">
-          Produit le prompt
-        </label>
-        <select
-          id="writer"
-          value={settings.writer}
-          onChange={(e) => setSettings({ ...settings, writer: e.target.value })}
-        >
-          {MODELS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label} — {m.note}
-            </option>
-          ))}
-        </select>
-
-        <label className="field-label mt-4" htmlFor="judge">
-          Juge l'audit
-        </label>
-        <select
-          id="judge"
-          value={settings.judge}
-          onChange={(e) => setSettings({ ...settings, judge: e.target.value })}
-        >
-          {MODELS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label} — {m.note}
-            </option>
-          ))}
-        </select>
-        {T.redacteur && (
-          <p className="note note-info mt-3">
-            {T.nom} : le prompt est toujours écrit par{" "}
-            {MODELS.find((m) => m.id === T.redacteur)?.label || T.redacteur}, quel que soit ce réglage.
-            Mesuré : il suit le guide qu'il applique bien mieux qu'un autre modèle.
-          </p>
-        )}
-
-        {settings.judge === redacteur && (
-          <p className="note note-info mt-3">
-            Le juge est le modèle qui a produit : les angles morts sont corrélés. Choisis-en un
-            autre pour que l'audit serve à quelque chose.
-          </p>
-        )}
+        {/* Plus de choix de modèle : Opus 5.5 pour tout, un effort par rôle
+            (ROLES, meta.js). Affiché plutôt que caché : on sait ce qui tourne. */}
+        <p className="lede text-[13px]">
+          Tout tourne sur <strong>{MODELS[0].label}</strong>, avec un effort par rôle :{" "}
+          {Object.values(ROLES)
+            .map((r) => `${r.nom.toLowerCase()} ${r.effort}`)
+            .join(" · ")}
+          . Le juge ne relit pas la conversation où le prompt a été écrit : il le reçoit
+          comme l'œuvre d'un autre, pour ne rien avoir à défendre.
+        </p>
 
         {/* Une limite par technique, et le curseur montre celle de la
             technique ARMÉE : un seul curseur pour deux méthodes ferait
