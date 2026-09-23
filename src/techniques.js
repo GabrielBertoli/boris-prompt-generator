@@ -12,12 +12,15 @@
    rien soit à refaire.
 
    Chaque technique expose donc EXACTEMENT le même contrat, et l'atelier
-   ne manipule plus qu'un objet `T`. Ajouter une troisième technique un
-   jour, c'est ajouter un fichier et une ligne ici — pas relire l'écran.
+   ne manipule plus qu'un objet `T`. Ajouter une technique, c'est ajouter un
+   fichier et une entrée ici — pas relire l'écran (fait pour la troisième
+   le 2026-09-04, pour la quatrième le 2026-09-23).
 
    Le contrat, dans l'ordre où l'atelier s'en sert :
      id, nom, resume, quand      — l'identité, montrée au choix
+     redacteur (facultatif)      — le modèle qui écrit, s'il est imposé
      limiteDefaut/Min/hardLimit  — la longueur, et son plafond dur
+     noteLimite                  — la phrase sous son curseur, aux réglages
      capLimit(n)                 — rabat un réglage dans les bornes
      buildMeta(limit)            — la méthode donnée au modèle
      etape1                      — { cle, titre, instruction() }
@@ -34,6 +37,7 @@
 import * as boris from "./meta.js";
 import * as gauntlet from "./gauntlet.js";
 import * as crochets from "./crochets.js";
+import * as opus55 from "./opus55.js";
 
 /* ---------- méthode Boris ----------
 
@@ -56,6 +60,9 @@ const BORIS = {
      même ordre de grandeur ni le même plafond, et un curseur partagé
      ferait suivre à l'une le réglage choisi pour l'autre. */
   cleReglage: "charLimit",
+  /* La phrase sous le curseur de SA limite, dans les réglages. */
+  noteLimite:
+    "Il montait à 8000, et le vérificateur comparait à ce nombre-là — un prompt de plus de 4000 caractères en sortait « au vert ».",
 
   hardLimit: boris.HARD_LIMIT,
   limiteMin: 1500,
@@ -153,6 +160,7 @@ const GAUNTLET = {
      335 mots sans que cette ligne bouge. */
   sortie: `un prompt d'un seul tenant, autour de ${Math.round((gauntlet.VISEE.lo + gauntlet.VISEE.hi) / 2)} mots`,
   cleReglage: "charLimitGauntlet",
+  noteLimite: `Le prompt du gantelet se mesure d'abord en MOTS — ${gauntlet.VISEE.lo} à ${gauntlet.VISEE.hi} — et le plafond en caractères n'est là que pour arrêter un débordement franc.`,
   credit: "Technique de Matt Shumer, empaquetée en skill par RoboNuggets (CC BY 4.0).",
 
   hardLimit: gauntlet.HARD_LIMIT,
@@ -227,6 +235,8 @@ const CROCHETS = {
   unite: "car.",
   sortie: `un prompt de cinq sections, ${crochets.CROCHETS_MIN} à ${crochets.CROCHETS_MAX} crochets`,
   cleReglage: "charLimitHooks",
+  noteLimite:
+    "Cinq sections et des crochets d'une ligne : si ça déborde, c'est le monde ou le fond qui s'est mis à raconter, jamais les crochets.",
   credit: "Transposée des Function Hooks de Claude Code (Anthropic, proposition publique du 2026-09-03).",
 
   hardLimit: crochets.HARD_LIMIT,
@@ -271,7 +281,74 @@ const CROCHETS = {
     "Dis ce que tu confies et ce qui, dans ton domaine, engage pour de bon. L'atelier écrit le monde de l'agent, retire ce qu'il ne doit jamais pouvoir faire, et accroche chaque règle au geste qu'elle gouverne, du plus haut au plus bas : le premier crochet enveloppe tous les autres. Une question ne t'est posée que si la réponse change le monde ou le retrait.",
 };
 
-export const TECHNIQUES = [BORIS, GAUNTLET, CROCHETS];
+/* ---------- méthode Opus 5.5 ----------
+   Tirée du guide d'Anthropic sur Opus 5.5 (2026-09-22) — voir l'en-tête
+   de `opus55.js`. Une tâche BORNÉE, confiée en un message : la preuve est
+   dans la ligne d'arrivée, et les arrêts sont nommés. */
+
+const OPUS55 = {
+  id: "opus55",
+  nom: "Méthode Opus 5.5",
+  court: "Opus 5.5",
+  resume: "Le message qui confie une tâche entière à Opus 5.5 : ce que « fini » veut dire, et quand s'arrêter pour te demander.",
+  quand: "Tu confies une tâche bornée, livrée en un run : une migration, un audit, une page, un document, une analyse. Prompt court d'un seul tenant, l'oracle est la LIGNE D'ARRIVÉE.",
+  unite: "car.",
+  sortie: `un prompt d'un seul tenant, autour de ${Math.round((opus55.VISEE.lo + opus55.VISEE.hi) / 2)} mots`,
+  cleReglage: "charLimitOpus55",
+  noteLimite: `Le message se mesure d'abord en MOTS — ${opus55.VISEE.lo} à ${opus55.VISEE.hi} — et une tâche simple tient dans le bas de la fourchette : le plafond en caractères n'arrête qu'un débordement franc.`,
+  /* Le rédacteur de CETTE technique, au-dessus du réglage « Produit le
+     prompt ». Mesuré au banc du 2026-09-23 (huit utilisateurs fictifs,
+     juge Opus 5.5 en effort max) : rédigés par Sonnet 5, trois cas sur
+     huit posaient une question superflue et les notes allaient de 4,5 à
+     9,5 ; rédigés par Opus 5.5, les huit séries de questions étaient
+     justes et les notes allaient de 7,5 à 10. Un prompt pour Opus 5.5 se
+     fait écrire par Opus 5.5 — le guide qu'il applique est le sien. */
+  redacteur: "claude-opus-5-5",
+  credit: "Tirée du guide d'Anthropic « Getting the most out of Opus 5.5 » (claude.dev, 22 septembre 2026).",
+
+  hardLimit: opus55.HARD_LIMIT,
+  limiteMin: opus55.LIMITE_MIN,
+  limiteDefaut: opus55.LIMITE_DEFAUT,
+  capLimit: opus55.capLimit,
+  fenetre: () => ({ lo: opus55.VISEE.lo, hi: opus55.VISEE.hi }),
+
+  buildMeta: opus55.buildMeta,
+
+  /* Même forme que Boris — des questions — donc le même écran, sans
+     branche nouvelle dans l'atelier. */
+  etape1: {
+    cle: "questions",
+    titre: "L'arrivée et l'objet",
+    instruction: opus55.etape1Instruction,
+  },
+  etape2Instruction: opus55.etape2Instruction,
+
+  verifyPrompt: opus55.verifyPrompt,
+  repairInstruction: opus55.repairInstruction,
+  /* Comme au gantelet : une tentative peut pécher par le bas, et la plus
+     courte serait la plus mutilée. */
+  choisirMeilleure: opus55.choisirMeilleure,
+
+  CRITERES: opus55.CRITERES,
+  auditInstruction: opus55.auditInstruction,
+  auditApplyInstruction: opus55.auditApplyInstruction,
+  correctionInstruction: opus55.correctionInstruction,
+  baseConvoFor: opus55.baseConvoFor,
+
+  exempleIdee:
+    "Exemple : migrer tous les endpoints de paiement de mon dépôt vers le nouveau SDK Stripe — fini quand l'ancien client est supprimé et que les tests passent…\n\n" +
+    "Ou : auditer chaque service du dossier services/ pour le bug de reconnexion décrit dans le ticket, avec un tableau service par service…",
+  exempleContraintes:
+    "Le dépôt ou les fichiers concernés, ce qui prouvera que c'est fini (tests, liste couverte, fichier livré), ce qui serait destructeur chez toi, les styles que tu ne veux plus voir…",
+  exempleCorrection:
+    "Ex. : ajoute « forcer un push » aux arrêts, retire la liste TASKS.md, exclus aussi les dégradés violets…",
+
+  bandeau: "Tâche — Fini — Arrêts — Clauses — Compte rendu",
+  accroche:
+    "Dis ce que tu confies et à quoi tu verras que c'est fini. L'atelier écrit le message à envoyer à Opus 5.5 : la tâche entière, la ligne d'arrivée, quand continuer sans toi et quand s'arrêter, les seules consignes utiles pour ce type de travail, et un compte rendu qui commence par ce qui t'attend. Une question ne t'est posée que si l'arrivée ou l'objet du travail ne se devinent pas.",
+};
+
+export const TECHNIQUES = [BORIS, GAUNTLET, CROCHETS, OPUS55];
 
 export const DEFAULT_TECHNIQUE = BORIS.id;
 

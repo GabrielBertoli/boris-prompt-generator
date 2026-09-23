@@ -249,7 +249,7 @@ section("Plafond de longueur");
   );
 }
 
-/* ---------- 1 bis 2 ter. les trois techniques ----------
+/* ---------- 1 bis 2 ter. les quatre techniques ----------
 
    L'atelier produit maintenant deux objets différents. Ce qui se vérifie
    ici n'est pas « le gantelet marche » mais la seule chose qui puisse
@@ -258,23 +258,23 @@ section("Plafond de longueur");
    170 mots dit « à refaire » sans que rien soit à refaire — et personne
    ne va relire le code pour un verdict qui a l'air d'un avis. */
 
-section("Les trois techniques");
+section("Les quatre techniques");
 
 {
   const { DEFAULT_TECHNIQUE, TECHNIQUES, estTechnique, techniqueOf } = await import("../src/techniques.js");
   const gaunt = await import("../src/gauntlet.js");
   const croch = await import("../src/crochets.js");
 
-  assert("il y a trois techniques", TECHNIQUES.length === 3, TECHNIQUES.map((t) => t.id).join(", "));
+  assert("il y a quatre techniques", TECHNIQUES.length === 4, TECHNIQUES.map((t) => t.id).join(", "));
   assert("Boris reste celle par défaut", DEFAULT_TECHNIQUE === "boris", DEFAULT_TECHNIQUE);
   assert("un identifiant inconnu retombe sur Boris", techniqueOf("inventée").id === "boris");
   assert("un identifiant absent aussi", techniqueOf(undefined).id === "boris");
-  assert("estTechnique refuse ce qui n'en est pas une", !estTechnique("inventée") && estTechnique("gauntlet") && estTechnique("hooks"));
+  assert("estTechnique refuse ce qui n'en est pas une", !estTechnique("inventée") && estTechnique("gauntlet") && estTechnique("hooks") && estTechnique("opus55"));
 
   /* LE contrat. Un champ manquant ne se voit pas au chargement : il se
      voit à la génération, une fois l'appel payé. */
   const CONTRAT = [
-    "id", "nom", "resume", "quand", "cleReglage", "hardLimit", "limiteMin", "limiteDefaut",
+    "id", "nom", "resume", "quand", "cleReglage", "noteLimite", "hardLimit", "limiteMin", "limiteDefaut",
     "capLimit", "fenetre", "buildMeta", "etape1", "etape2Instruction", "verifyPrompt",
     "CRITERES", "auditInstruction", "auditApplyInstruction", "correctionInstruction", "baseConvoFor",
     "exempleIdee", "exempleContraintes", "exempleCorrection", "bandeau", "accroche",
@@ -506,6 +506,162 @@ section("L'oracle de la pile de crochets");
   assert("et survit à l'export/import", lib.parseBundle(JSON.stringify([{ ...eH }])).items[0].technique === "hooks");
 }
 
+/* ---------- 1 bis 2 quinquies. l'oracle de la méthode Opus 5.5 ----------
+   Même discipline que pour les deux précédentes : l'exemple passe, chaque
+   faute que le guide nomme est provoquée une par une, et les quatre
+   oracles sont prouvés NON interchangeables. */
+
+section("L'oracle de la méthode Opus 5.5");
+
+{
+  const { techniqueOf } = await import("../src/techniques.js");
+  const o55 = await import("../src/opus55.js");
+  const O = techniqueOf("opus55");
+  const bon = o55.PROMPT_REFERENCE;
+  const vu = O.verifyPrompt(bon, O.limiteDefaut);
+  assert("l'exemple de référence passe son propre vérificateur", vu.pass, vu.fails.join(" ; "));
+  const fen = O.fenetre();
+  assert("et il est dans la fenêtre visée", vu.mots >= fen.lo && vu.mots <= fen.hi, `${vu.mots} mots pour ${fen.lo}–${fen.hi}`);
+  /* La leçon du gantelet : la fourchette de mots mord AVANT le plafond,
+     sinon un curseur monte sans rien changer. Au rapport le plus bavard
+     qu'on ait mesuré (6,2 car./mot), le haut de la fourchette tient sous
+     le défaut, et le haut de la visée sous le plancher. */
+  assert("la fourchette de mots tient sous le réglage par défaut", o55.MOTS_MAX * 6.2 < o55.LIMITE_DEFAUT, `${o55.MOTS_MAX * 6.2} car.`);
+  assert("et la visée sous le plancher du curseur", o55.VISEE.hi * 6.2 < o55.LIMITE_MIN, `${o55.VISEE.hi * 6.2} car.`);
+
+  const meta = O.buildMeta(O.limiteDefaut);
+  for (const phrase of [o55.FINI, o55.CONTINUE, o55.ARRET, o55.DERNIERE_LIGNE]) {
+    assert(`le méta-prompt impose « ${phrase.slice(0, 40)}… »`, meta.includes(phrase));
+  }
+  assert("le méta-prompt nomme les styles par défaut du guide", o55.STYLES_PAR_DEFAUT.every((st) => meta.includes(st)));
+  /* Le méta-prompt ne doit rien demander de ce qu'il interdit : il nomme
+     « réfléchis bien » dans sa liste noire, jamais comme consigne. */
+  assert(
+    "l'étape 1 et l'étape 2 ne demandent jamais de réfléchir",
+    !/r[ée]fl[ée]chis/i.test(O.etape1.instruction() + O.etape2Instruction({ limit: O.limiteDefaut }))
+  );
+
+  const casse = [
+    ["la ligne d'arrivée retirée", bon.replace("Fini veut dire :", "Il faudra que"), "fini veut dire"],
+    ["la règle de continuer retirée", bon.replace(o55.CONTINUE, ""), "même message"],
+    ["la règle d'arrêt retirée", bon.replace("Arrête-toi et demande-moi seulement si", "Préviens-moi si"), "arrête-toi"],
+    ["un arrêt propre glissé dans la phrase fixe", bon.replace("sans moi, ou avant", "sans moi, si un test échoue, ou avant"), "phrase fixe"],
+    ["un critère d'arrivée flou", bon.replace("et la suite de tests passe en entier", "et le code reste clair"), "constater"],
+    ["une tâche qui commence par « Améliore »", bon.replace("Migre tous", "Améliore tous"), "améliore"],
+    ["aucun geste destructeur nommé", bon.replace(/(geste destructeur :)[^.]*\./, "$1."), "destructeur"],
+    ["« décris ton raisonnement »", bon.replace("Migre", "Décris ton raisonnement en détail. Migre"), "raisonnement"],
+    ["un « réfléchis bien »", bon.replace("Migre", "Réfléchis bien, puis migre"), "réflexion"],
+    ["un « étape par étape »", bon.replace("Migre", "Procède étape par étape et migre"), "réflexion"],
+    ["une demande de montrer son raisonnement", bon.replace("Migre", "Montre ton raisonnement complet. Migre"), "raisonnement"],
+    ["un « évite le look générique »", bon.replace("Migre", "Évite un look générique. Migre"), "générique"],
+    ["des sous-agents sans preuves", bon.replace("et vérifie ses preuves avant de les accepter ", ""), "preuves"],
+    ["la dernière ligne de Boris", bon.replace(o55.DERNIERE_LIGNE, "Sinon tu continues."), "autre technique"],
+    ["une puce ajoutée", bon.replace("Fini veut dire :", "- Fini veut dire :"), "puces"],
+    ["un titre ajouté", "# TÂCHE\n" + bon, "titres"],
+  ];
+  for (const [nom, texte, attendu] of casse) {
+    const v = O.verifyPrompt(texte, O.limiteDefaut);
+    assert(`refusé : ${nom}`, !v.pass, "accepté à tort");
+    assert(
+      `et la raison le nomme (${attendu})`,
+      v.fails.some((f) => f.toLowerCase().includes(attendu.toLowerCase())),
+      v.fails.join(" ; ")
+    );
+  }
+
+  /* Ce qu'un modèle rend et qu'un vérificateur bête refuserait à tort :
+     l'apostrophe typographique, l'espace fine insécable que la
+     typographie française met devant les deux-points. */
+  assert("une apostrophe typographique ne fait pas échouer", O.verifyPrompt(bon.replace(/'/g, "’"), O.limiteDefaut).pass);
+  assert("une espace insécable avant les deux-points non plus", O.verifyPrompt(bon.replace(/ :/g, "\u202f:"), O.limiteDefaut).pass);
+  /* « une étape » dans la règle de continuer n'est pas « étape par étape ». */
+  /* Faux positifs trouvés à la relecture du 2026-09-23. */
+  assert("« un guide pas à pas » est un livrable, pas une consigne de réflexion", O.verifyPrompt(bon.replace("pas un plan", "avec un guide pas à pas dans MIGRATION.md, pas un plan"), O.limiteDefaut).pass);
+  assert("un prompt sans saut de paragraphe passe encore", O.verifyPrompt(bon.replace(/\n\n/g, " "), O.limiteDefaut).pass, O.verifyPrompt(bon.replace(/\n\n/g, " "), O.limiteDefaut).fails.join(" ; "));
+  assert("un texte en Unicode décomposé aussi", O.verifyPrompt(bon.normalize("NFD"), O.limiteDefaut).pass);
+  assert("et un trait d'union insécable dans « Arrête-toi »", O.verifyPrompt(bon.replace("Arrête-toi", "Arrête\u2011toi"), O.limiteDefaut).pass);
+  assert("la règle de continuer n'est pas prise pour une consigne de réflexion", !o55.verifyPrompt(bon, O.limiteDefaut).fails.some((f) => f.includes("réflexion")));
+
+  const court = O.verifyPrompt("Migre le dépôt. Fini veut dire : les tests passent. " + o55.DERNIERE_LIGNE, O.limiteDefaut);
+  assert("un prompt trop court est refusé", !court.pass && court.fails.some((f) => f.startsWith("longueur")), court.fails.join(" ; "));
+  const long = O.verifyPrompt(bon + " " + "mot ".repeat(500), O.limiteDefaut);
+  assert("un prompt qui déborde le plafond est marqué hors limite", long.over === true);
+
+  const B = techniqueOf("boris");
+  const G = techniqueOf("gauntlet");
+  const H = techniqueOf("hooks");
+  assert("l'oracle de Boris rejette un prompt Opus 5.5", !B.verifyPrompt(bon, 3900).pass);
+  assert("celui du gantelet aussi", !G.verifyPrompt(bon, G.limiteDefaut).pass);
+  assert("celui des crochets aussi", !H.verifyPrompt(bon, H.limiteDefaut).pass);
+  for (const [nom, ref] of [
+    ["Boris", (await import("../src/meta.js")).PROMPT_REFERENCE],
+    ["gantelet", (await import("../src/gauntlet.js")).PROMPT_REFERENCE],
+    ["crochets", (await import("../src/crochets.js")).PROMPT_REFERENCE],
+  ]) {
+    assert(`et celui d'Opus 5.5 rejette un prompt ${nom}`, !O.verifyPrompt(ref, O.limiteDefaut).pass);
+  }
+
+  /* Tentatives DÉDUITES de la fenêtre — écrites en dur (60/340/305), elles
+     ont viré au rouge dès que la visée est descendue de 150–240 à 120–230 :
+     la leçon du § 29, rejouée le jour même. */
+  const t = (id, mots) => ({ text: id, check: { pass: false, fails: [`longueur : ${mots} mots`], mots } });
+  const tries = [t("a", Math.round(o55.MOTS_MIN / 3)), t("b", o55.MOTS_MAX + 40), t("c", o55.MOTS_MAX + 5)];
+  assert("la meilleure tentative est la plus proche de la fenêtre", O.choisirMeilleure(tries).text === "c", O.choisirMeilleure(tries).text);
+
+  const rep = O.repairInstruction({ count: 2400, mots: 330, fails: ["x"], over: true }, O.limiteDefaut, 2);
+  assert("la réparation redemande les cinq mouvements, pas huit sections", /cinq mouvements/.test(rep) && !/huit sections/.test(rep));
+  assert("et la dernière ligne exacte", rep.includes(o55.DERNIERE_LIGNE));
+
+  const lib = await import("../src/library.js");
+  const e = lib.makeEntry({ idea: "une migration", prompt: bon, limit: O.limiteDefaut, version: 1, technique: "opus55" });
+  assert("une entrée de bibliothèque garde la technique", e.technique === "opus55");
+  assert("et survit à l'export/import", lib.parseBundle(JSON.stringify([{ ...e }])).items[0].technique === "opus55");
+
+  /* Le modèle lui-même. Opus 5.5 refuse `thinking: disabled` (400) et sa
+     réflexion se compte dans max_tokens : l'atelier doit l'omettre ET lui
+     rendre la place. Opus 5, lui, l'accepte encore — il ne doit pas être
+     pris dans le même filet. */
+  const api = await import("../src/api.js");
+  const { MODELS, PRICES, costOf } = await import("../src/meta.js");
+  assert("Opus 5.5 est proposé au choix des modèles", MODELS.some((m) => m.id === "claude-opus-5-5"));
+  assert("il a son tarif", PRICES["claude-opus-5-5"]?.in === 4 && PRICES["claude-opus-5-5"]?.out === 20);
+  assert(
+    "et sa lecture en cache est comptée à son prix, pas au dixième",
+    Math.abs(costOf("claude-opus-5-5", { cache_read_input_tokens: 1e6 }) - 0.2) < 1e-9,
+    `${costOf("claude-opus-5-5", { cache_read_input_tokens: 1e6 })}`
+  );
+  assert("Opus 5.5 est reconnu comme pensant toujours", api.PENSE_TOUJOURS.test("claude-opus-5-5"));
+  /* La méthode impose son rédacteur (mesuré au banc) ; il doit exister au
+     choix des modèles, sinon l'écran afficherait un identifiant nu. */
+  assert("la méthode Opus 5.5 est écrite par Opus 5.5", O.redacteur === "claude-opus-5-5", O.redacteur);
+  assert("et c'est la seule qui impose le sien", (await import("../src/techniques.js")).TECHNIQUES.filter((x) => x.redacteur).length === 1);
+  assert("Opus 5 ne l'est pas", !api.PENSE_TOUJOURS.test("claude-opus-5"));
+
+  /* Le corps réellement envoyé, lu sur un fetch intercepté : c'est lui que
+     l'API refuserait, pas une constante. */
+  const envoye = async (model) => {
+    const vrai = globalThis.fetch;
+    let corps = null;
+    globalThis.fetch = async (_url, init) => {
+      corps = JSON.parse(init.body);
+      throw new Error("intercepté");
+    };
+    try {
+      await api.callClaude([{ role: "user", content: "x" }], { apiKey: "k", model, maxTokens: 1200 });
+    } catch {
+      /* attendu : l'appel est intercepté */
+    } finally {
+      globalThis.fetch = vrai;
+    }
+    return corps;
+  };
+  const c55 = await envoye("claude-opus-5-5");
+  assert("à Opus 5.5, aucun réglage de réflexion n'est envoyé", c55 && !("thinking" in c55), JSON.stringify(c55?.thinking));
+  assert("et la place de sa réflexion s'ajoute au budget", c55?.max_tokens === 1200 + api.MARGE_REFLEXION, `${c55?.max_tokens}`);
+  const c5 = await envoye("claude-sonnet-5");
+  assert("aux autres, la réflexion reste coupée et le budget inchangé", c5?.thinking?.type === "disabled" && c5?.max_tokens === 1200);
+}
+
 /* ---------- 1 bis 3. la note du juge ----------
    Le juge répond en JSON libre. Tout ce qui suit porte sur ce qu'on en
    RECONSTRUIT : une note de 47 — déjà vue quand un modèle note sur 100 —
@@ -633,11 +789,11 @@ section("La note du juge");
 section("L'aide");
 
 {
-  const { CHAPITRES, MOUVEMENTS_GANTELET, PIED, SECTIONS_BORIS, SECTIONS_CROCHETS } = await import("../src/aide.js");
+  const { CHAPITRES, MOUVEMENTS_GANTELET, MOUVEMENTS_OPUS55, PIED, SECTIONS_BORIS, SECTIONS_CROCHETS } = await import("../src/aide.js");
   const { buildMeta, HARD_LIMIT } = await import("../src/meta.js");
 
-  const NB_CHAPITRES = 15;
-  assert("l'aide a quinze chapitres", CHAPITRES.length === NB_CHAPITRES, `${CHAPITRES.length}`);
+  const NB_CHAPITRES = 16;
+  assert("l'aide a seize chapitres", CHAPITRES.length === NB_CHAPITRES, `${CHAPITRES.length}`);
   assert("chacun porte un numéro unique", new Set(CHAPITRES.map((c) => c.num)).size === NB_CHAPITRES);
   assert("chacun porte une clé unique", new Set(CHAPITRES.map((c) => c.cle)).size === NB_CHAPITRES);
   /* Le numéro se déduit du rang : c'est ce qui permet d'insérer un
@@ -660,7 +816,7 @@ section("L'aide");
 
   /* Toutes les parties de l'écran sont couvertes. Sans cette liste, on
      ajoute un panneau et l'aide vieillit en silence. */
-  for (const cle of ["porte", "idee", "techniques", "questions", "marbre", "epreuve", "note", "fil", "casse", "reglages", "cout", "methode", "gantelet", "crochets", "securite"]) {
+  for (const cle of ["porte", "idee", "techniques", "questions", "marbre", "epreuve", "note", "fil", "casse", "reglages", "cout", "methode", "gantelet", "crochets", "opus55", "securite"]) {
     assert(`le chapitre « ${cle} » est là`, CHAPITRES.some((c) => c.cle === cle));
   }
 
@@ -727,6 +883,25 @@ section("L'aide");
       SECTIONS_CROCHETS.every(([, quoi]) => quoi && quoi.length > 40)
     );
     assert("et la dernière ligne annoncée est la vraie", SECTIONS_CROCHETS[4][1].includes(croch.DERNIERE_LIGNE));
+  }
+
+  /* Le chapitre Opus 5.5 annonce cinq mouvements ; ses trois phrases
+     littérales viennent de `opus55.js` et doivent être dans l'exemple de
+     référence — une aide qui promet une phrase que l'atelier n'écrit plus
+     se lit comme vraie. */
+  {
+    const o55 = await import("../src/opus55.js");
+    assert("l'aide annonce cinq mouvements Opus 5.5", MOUVEMENTS_OPUS55.length === 5, `${MOUVEMENTS_OPUS55.length}`);
+    assert(
+      "chaque mouvement est traduit en français courant",
+      MOUVEMENTS_OPUS55.every(([, quoi]) => quoi && quoi.length > 40)
+    );
+    for (const phrase of [o55.FINI, o55.CONTINUE, o55.ARRET, o55.DERNIERE_LIGNE]) {
+      assert(`« ${phrase.slice(0, 40)}… » est dans le prompt de référence`, o55.PROMPT_REFERENCE.includes(phrase));
+      assert("et l'aide la cite", MOUVEMENTS_OPUS55.some(([t, q]) => t.includes(phrase) || q.includes(phrase)));
+    }
+    const attribution = CHAPITRES.find((c) => c.cle === "techniques").points.join(" ");
+    assert("l'aide cite le guide d'Anthropic sur Opus 5.5", /Getting the most out of Opus 5\.5/.test(attribution));
   }
 
   /* Le chapitre « méthode » cite le plafond réel : un chiffre écrit à la
@@ -1485,7 +1660,7 @@ const SURFACES = [
     </script>`,
     check(dom) {
       const tuiles = (dom.match(/class="technique(?: technique-active)?"/g) || []).length;
-      assert("les trois techniques sont proposées", tuiles === 3, `${tuiles} tuile(s)`);
+      assert("les quatre techniques sont proposées", tuiles === 4, `${tuiles} tuile(s)`);
       const active = /class="technique technique-active"[\s\S]{0,400}?technique-nom">([^<]*)</.exec(dom);
       assert(
         "celle qui est armée est celle qui est marquée",
@@ -1866,6 +2041,46 @@ if (!ANTHROPIC) {
     assert("un crochet retient session.stop", crochets.some((c) => c.evenement === "session.stop"));
     assert("le remboursement est retiré ou refusé", /rembours/i.test(runH.text), runH.text.slice(0, 200));
     assert(`il finit par « ${croch.DERNIERE_LIGNE} »`, runH.text.trim().endsWith(croch.DERNIERE_LIGNE));
+  }
+
+  /* ---- la même boucle, pour la méthode Opus 5.5 ----
+     Une idée d'audit à grande échelle : c'est le cas où la clause des
+     sous-agents s'applique, donc celui où son exigence (« vérifie ses
+     preuves ») peut devenir intenable pour un modèle réel. L'écriture
+     passe par Opus 5.5 lui-même — c'est aussi la preuve que l'atelier
+     sait lui parler (réflexion omise, place rendue). */
+  const O = techniqueOf("opus55");
+  const limitO = O.limiteDefaut;
+  const runO = await runVerifiedGeneration({
+    ask: async (convo) => {
+      const { text } = await callClaude(convo, { apiKey: ANTHROPIC, model: "claude-opus-5-5", maxTokens: 1600 });
+      return text;
+    },
+    baseConvo: O.baseConvoFor({
+      idea: "auditer chaque service du dossier services/ de notre monorepo pour le bug de reconnexion Redis décrit dans le ticket OPS-412, et me dire lesquels sont touchés",
+      limit: limitO,
+    }),
+    instruction: O.etape2Instruction({ limit: limitO }),
+    limit: limitO,
+    verify: O.verifyPrompt,
+    repair: O.repairInstruction,
+    choisir: O.choisirMeilleure,
+    onLog: (line) => console.log(`   · [opus55] ${line}`),
+  }).catch((error) => {
+    assert("la méthode Opus 5.5 obtient une réponse d'Opus 5.5", false, error.message);
+    return null;
+  });
+
+  if (runO) {
+    const o55 = await import("../src/opus55.js");
+    assert(
+      `le prompt Opus 5.5 passe son oracle en ${MAX_TENTATIVES} tentatives au plus`,
+      runO.check.pass,
+      `${runO.check.mots} mots — ${runO.check.fails.join(" ; ") || "au vert"}`
+    );
+    assert("il nomme le ticket de l'idée", /OPS-412/.test(runO.text), runO.text.slice(0, 160));
+    assert("la clause d'audit s'y applique : sous-agents et tableau", /sous-agent/i.test(runO.text) && /tableau/i.test(runO.text));
+    assert(`il finit par « ${o55.DERNIERE_LIGNE} »`, runO.text.trim().endsWith(o55.DERNIERE_LIGNE));
   }
 }
 

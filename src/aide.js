@@ -16,12 +16,14 @@
 
 import { VISEE } from "./gauntlet.js";
 import { SECTIONS as SECTIONS_HOOKS, PLACEMENTS, CROCHETS_MIN, CROCHETS_MAX, DERNIERE_LIGNE } from "./crochets.js";
+import * as opus55 from "./opus55.js";
 
 /* La longueur annoncée du prompt de gantelet vient de la fenêtre visée,
    jamais d'un chiffre écrit à la main : « environ 170 mots » est resté
    vrai jusqu'au 2026-08-26 et faux le lendemain, alors que le seul
    endroit qui décide de la longueur avait changé (`gauntlet.js`). */
 const MOTS_TYPE = Math.round((VISEE.lo + VISEE.hi) / 2);
+const MOTS_OPUS55 = Math.round((opus55.VISEE.lo + opus55.VISEE.hi) / 2);
 
 /* Les huit sections du prompt produit. Les titres doivent correspondre
    EXACTEMENT à ceux qu'impose `buildMeta()` — une assertion le vérifie,
@@ -65,6 +67,17 @@ export const SECTIONS_CROCHETS = [
   [SECTIONS_HOOKS[4], `Quand il a fini, vérifiable, verrouillé des deux côtés. Se termine toujours par « ${DERNIERE_LIGNE} »`],
 ];
 
+/* Les cinq mouvements du prompt produit par la méthode Opus 5.5. Les
+   phrases littérales viennent de `opus55.js`, jamais recopiées : une
+   assertion vérifie qu'elles sont dans l'exemple de référence. */
+export const MOUVEMENTS_OPUS55 = [
+  ["La tâche entière", "Tout le travail en un seul message : ce qu'on fait, sur quoi, et le livrable FINI — le fichier, la branche, la page — jamais un plan ou un brouillon à reprendre."],
+  [opus55.FINI, "La ligne d'arrivée : deux à cinq critères qu'on peut constater — les tests passent, chaque élément est traité, le fichier existe. Jamais « quand c'est bien » : un modèle qui ne sait pas quand il a fini s'arrête trop tôt ou s'arrête pour te demander."],
+  [opus55.ARRETE + "…", `Les arrêts nommés, en deux phrases fixes. « ${opus55.CONTINUE} » Puis « ${opus55.ARRET} » suivi des gestes qui engagent dans ce travail-là — supprimer des données, forcer un push, mettre en ligne, envoyer à quelqu'un. Un autre arrêt n'entre que si tu l'as demandé.`],
+  ["Les clauses du type", "Seulement celles qui s'appliquent à ce travail-là : une liste de tâches dans un fichier pour un long run, des sous-agents dont on vérifie les preuves pour un audit, les styles exclus nommément pour du design, ce qui n'a pas pu être confirmé pour une recherche, ce qui bloquerait la fusion pour une revue."],
+  [opus55.DERNIERE_LIGNE, "La dernière ligne, toujours. Quand le travail se termine, ce qui t'attend — une décision laissée ouverte, un changement à valider — se lit en premier."],
+];
+
 const RAW_CHAPITRES = [
   {
     cle: "porte",
@@ -90,26 +103,29 @@ const RAW_CHAPITRES = [
   },
   {
     cle: "techniques",
-    titre: "Les trois techniques",
-    sert: "Choisir, avant d'écrire, laquelle des trois méthodes correspond à ce que tu confies.",
+    titre: "Les quatre techniques",
+    sert: "Choisir, avant d'écrire, laquelle des quatre méthodes correspond à ce que tu confies.",
     points: [
       "La méthode Boris écrit un mandat long — huit sections — pour un agent qui fait tourner quelque chose et découvre son travail là où ça casse. C'est ce qu'il te faut pour une application, un service, un algorithme : un périmètre à couvrir.",
       `La boucle du gantelet écrit un mandat d'un seul tenant — environ ${MOTS_TYPE} mots, sans la moindre section — pour un agent qui vise une chose qui existe déjà et recommence jusqu'à faire mieux qu'elle. C'est ce qu'il te faut quand tu vises une qualité et non un périmètre : une page, un texte, un outil, une analyse.`,
       `La pile de crochets écrit un mandat de garde — cinq sections, ${CROCHETS_MIN} à ${CROCHETS_MAX} règles numérotées — pour un agent dont ce qui compte le plus est ce qu'il ne doit PAS faire : données réelles, argent, envois, mise en ligne. Chaque règle est accrochée au geste qu'elle gouverne, et ce qui lui est interdit n'est pas une consigne : c'est absent de son monde.`,
-      "La différence tient à un mot : où est la preuve. Chez Boris elle est DANS le mandat — des contrôles que l'agent se donne. Au gantelet elle est DEHORS — une chose réelle, déjà bonne, que l'agent doit aller chercher et battre. Aux crochets elle est dans l'ORDRE — la première règle enveloppe toutes les autres, et rien en dessous ne peut la contourner.",
+      `La méthode Opus 5.5 écrit un message court — environ ${MOTS_OPUS55} mots, d'un seul tenant — qui confie une tâche bornée à Claude Opus 5.5 : une migration, un audit, une page, un document. Elle dit ce que « fini » veut dire, quand continuer sans toi et quand s'arrêter, et rien d'autre que les consignes utiles à ce type de travail.`,
+      "La différence tient à un mot : où est la preuve. Chez Boris elle est DANS le mandat — des contrôles que l'agent se donne. Au gantelet elle est DEHORS — une chose réelle, déjà bonne, que l'agent doit aller chercher et battre. Aux crochets elle est dans l'ORDRE — la première règle enveloppe toutes les autres, et rien en dessous ne peut la contourner. Avec Opus 5.5 elle est dans la LIGNE D'ARRIVÉE — ce qu'on pourra constater quand ce sera fini.",
       "Le choix se fait au-dessus de ton idée, avant de lancer. Il se verrouille dès qu'un prompt est à l'écran : changer de technique sous un prompt déjà écrit reviendrait à le juger avec les règles de l'autre. « Nouveau prompt » rouvre le choix.",
       "La boucle du gantelet est une technique de Matt Shumer, empaquetée en skill par RoboNuggets et reprise ici en français, sous licence CC BY 4.0. Elle n'est pas de nous, et elle est citée partout où elle est utilisée. Une seule chose a été changée par rapport au skill d'origine, et la licence demande de le dire : le mandat produit est plus long que les 120 à 180 mots qu'il prescrit.",
       "La pile de crochets est transposée des « Function Hooks » de Claude Code, une proposition d'architecture d'Anthropic mise en discussion publique le 3 septembre 2026 (Alice Poteat, issue GitHub anthropics/claude-code n° 91870) et non livrée à ce jour. Ce n'était pas une technique de prompt : c'est une façon de brancher des règles sur un outil. Ce qui en est repris, c'est l'idée — un monde fini, des capacités retirées plutôt qu'interdites, des règles accrochées à des gestes, un ordre qui est une autorité.",
+      "La méthode Opus 5.5 est tirée du guide d'Anthropic « Getting the most out of Opus 5.5 in Claude and Claude Code » (Addy Osmani, claude.dev, 22 septembre 2026). Elle contredit sur un point les méthodes Boris et crochets, et c'est voulu : elles interdisent « ne t'arrête pas » comme consigne devenue inutile, alors que le guide dit qu'Opus 5.5 s'arrête parfois pour rendre compte et qu'il faut lui nommer les arrêts voulus.",
     ],
   },
   {
     cle: "questions",
     titre: "Ce qu'on te demande avant d'écrire",
-    sert: "Une seule étape, deux formes : des questions (Boris, crochets) ou le choix d'une barre (gantelet).",
+    sert: "Une seule étape, deux formes : des questions (Boris, crochets, Opus 5.5) ou le choix d'une barre (gantelet).",
     points: [
       "Avec la méthode Boris : trois questions au maximum, et seulement si la réponse change matériellement ce qui va être écrit. Souvent il n'y en a aucune — c'est bon signe, ton idée se suffisait. Une réponse laissée vide sera tranchée par l'hypothèse la plus raisonnable, écrite noir sur blanc dans le résultat.",
       "Avec la boucle du gantelet : deux ou trois références te sont proposées, tu en choisis une, ou tu écris la tienne. Si ton idée en nommait déjà une, rien ne t'est demandé.",
       "Avec la pile de crochets : mêmes questions que chez Boris, trois au plus, mais elles portent sur le monde de l'agent — ce qu'il a sous la main — et sur ce qui, dans ton domaine, engage pour de bon et doit lui être retiré.",
+      "Avec la méthode Opus 5.5 : deux questions au plus, et seulement si l'on ne peut pas deviner à quoi on verra que c'est fini, ou sur quoi l'agent travaille. Le type de travail, les consignes utiles, les styles à exclure : l'atelier les tranche sans te les demander.",
       "Une bonne référence tient à trois choses : elle est PRÉCISE (« la page tarifs de Stripe », pas « les beaux sites »), on peut vraiment aller la chercher (la capturer, la lire, l'exécuter), et on peut poser les deux côte à côte pour en désigner une.",
       "Prends la plus dure que l'agent puisse réellement atteindre. Une référence trop facile fait gagner au premier tour et la boucle s'arrête sans avoir servi ; une référence floue fait tout approuver, parce que le juge finit par l'inventer.",
       "Il n'y a pas de mauvaise réponse courte. Trois mots valent mieux qu'un paragraphe : ce sont des points de décision, pas un questionnaire.",
@@ -234,6 +250,18 @@ const RAW_CHAPITRES = [
       "Rien d'autre n'y entre : ni architecture, ni pile technique, ni consigne de comportement. Le crochet qui voit tout journalise déjà ; chaque instruction en trop est une décision retirée à l'agent.",
     ],
     sections: SECTIONS_CROCHETS,
+  },
+  {
+    cle: "opus55",
+    titre: "Méthode Opus 5.5 — les cinq mouvements",
+    sert: "La structure du message produit par la méthode Opus 5.5, et à quoi sert chaque mouvement.",
+    points: [
+      `Un prompt Opus 5.5 tient en cinq mouvements, en phrases pleines, sans titre ni puce, autour de ${MOTS_OPUS55} mots. Il se lit comme un message envoyé à quelqu'un de compétent : la tâche, ce que fini veut dire, quand s'arrêter, puis ce qu'on attend en retour.`,
+      "Rien de ce que le modèle fait déjà n'y entre. Pas de « réfléchis bien » ni d'« étape par étape » : Opus 5.5 pense avant chaque réponse, et la ligne ne fait que ralentir. Pas de demande de montrer son raisonnement : c'est une demande que le modèle peut refuser, et la conversation peut basculer sur un modèle plus ancien.",
+      "Pour du design, jamais « évite un look générique » : ça remplace un style par défaut par un autre. Le message nomme ce qu'il ne veut pas voir — fond crème, italiques dans les titres, « 01 / 02 / 03 », boutons en pilule. Si ce qu'il choisit à la place ne te plaît pas, ajoute-le à la liste dans le fil de correction.",
+      "Le message se colle tel quel dans Claude Code ou dans l'app Claude, avec Opus 5.5 choisi dans le sélecteur de modèle. La règle des arrêts peut aussi vivre dans le CLAUDE.md du projet : elle vaut alors pour toutes les tâches.",
+    ],
+    sections: MOUVEMENTS_OPUS55,
   },
   {
     cle: "securite",

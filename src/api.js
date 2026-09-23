@@ -57,6 +57,11 @@ export const looksLikeKey = (key) => /^sk-ant-[A-Za-z0-9_-]{20,}$/.test(String(k
    d'INACTIVITÉ réarmé à chaque morceau reçu — c'est le silence qui est
    anormal, pas la durée — et un plafond dur au-dessus de tout. */
 
+/* Les modèles qui refusent `thinking: disabled`, et la place qu'on leur
+   rend en plus de ce que l'atelier demande pour le texte seul. */
+export const PENSE_TOUJOURS = /^claude-(fable|mythos|opus-5-5)/;
+export const MARGE_REFLEXION = 16000;
+
 const STALL_MS = 60000; // silence toléré entre deux morceaux
 const HARD_MS = 300000; // plafond absolu d'un seul appel
 
@@ -83,8 +88,15 @@ export async function callClaude(
 
   // Réflexion coupée : la longueur de sortie reste prévisible sous max_tokens,
   // et la boucle d'assertions joue déjà le rôle d'auto-correction.
-  // Fable et Mythos pensent toujours et refusent le réglage (400) : on l'omet.
-  if (!/^claude-(fable|mythos)/.test(model)) {
+  // Fable, Mythos et Opus 5.5 pensent toujours et refusent le réglage (400) :
+  // on l'omet — et on leur rend la place que la réflexion prend. Elle se
+  // compte DANS max_tokens : avec les 1200 jetons de l'analyse, un modèle qui
+  // pense aurait tout dépensé avant d'écrire la première accolade, et
+  // l'atelier aurait dit « réponse coupée » sur une demande parfaitement saine.
+  // La marge n'est pas facturée : seuls les jetons produits le sont.
+  if (PENSE_TOUJOURS.test(model)) {
+    payload.max_tokens = maxTokens + MARGE_REFLEXION;
+  } else {
     payload.thinking = { type: "disabled" };
   }
 

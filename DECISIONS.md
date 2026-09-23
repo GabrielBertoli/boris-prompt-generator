@@ -822,10 +822,165 @@ l'aide (assertion : « Function Hooks » et « 91870 »), et ici.
 documentée dans `techniques/crochets.md`, et la carte de la tour Dev propose
 désormais BORIS, GANTELET ou CROCHETS (prompt 3 822, ligne 3 923/3990).
 
+
+---
+
+## 31. Une quatrième technique — la méthode Opus 5.5
+
+Demande de Gabriel le 2026-09-23 : analyser le guide d'Anthropic *Getting the
+most out of Opus 5.5 in Claude and Claude Code* (Addy Osmani, claude.dev,
+2026-09-22) et en tirer une méthode, en s'inspirant de Boris et du gantelet.
+Analyse d'abord, validée par lui avant d'écrire ; forme choisie par lui :
+**prose courte** ; périmètre choisi par lui : **la méthode + Opus 5.5 au
+sélecteur de modèles**, sans toucher aux trois autres méthodes.
+
+**Ce que le guide dit d'écrire, et pourquoi le modèle le demande.** La tâche
+entière en un message, avec une ligne d'arrivée (« done means : the tests
+pass ») — 5.5 tient mieux le long travail en plusieurs étapes. Les arrêts
+**nommés** : c'est le comportement nouveau, 5.5 s'arrête parfois pour rendre
+compte (résumé qui nomme l'étape suivante sans la faire, « je continue ? »,
+choix non bloquants), et il suit une consigne qui nomme ces arrêts. Retirer
+« think carefully » : il pense avant chaque réponse. Ne jamais demander de
+reproduire le raisonnement : c'est une catégorie de signalement. Puis des
+conseils par type : styles exclus **nommés** pour le design, sous-agents dont
+on vérifie les preuves + un tableau pour un audit, liste de tâches dans un
+fichier pour un long run, « bloquer la fusion » pour une revue, « marque ce
+que tu n'as pas pu confirmer » pour une recherche, relecture des
+contradictions pour un long document, livrable fini plutôt qu'un plan, et un
+compte rendu qui commence par ce qui attend l'humain.
+
+**La forme retenue** (`src/opus55.js`) : cinq mouvements en prose, sans titre
+ni puce — la tâche entière et son livrable fini ; « Fini veut dire : » et des
+critères observables ; la règle d'arrêt reprise mot pour mot (« Quand une
+étape n'a pas besoin de moi, continue… » puis « Arrête-toi et demande-moi
+seulement si… » avec les gestes destructeurs du domaine nommés) ; les clauses
+du type, seulement celles qui s'appliquent ; dernière ligne « Termine par
+trois titres : Bloqué sur moi, Changé, Trouvé. ». Longueur en **mots** (leçon
+du § 29) : visée 150–240, fourchette 110–300, défaut 2 200 car., plancher
+1 600, plafond dur 2 600. Étape 1 à la forme `questions` (aucune branche dans
+l'écran) : deux questions au plus, seulement sur l'arrivée ou l'objet du
+travail ; le type de tâche, les clauses et les styles se tranchent sans
+demander.
+
+**Une contradiction assumée.** Boris (critère `economie`) et les crochets
+(critère `fermeture`) interdisent « ne t'arrête pas » comme correction de
+comportement devenue native. Pour 5.5, le guide dit l'inverse sur ce seul
+point. La nouvelle méthode ne partage donc aucune règle avec `meta.js`, et
+les deux autres grilles n'ont **pas** été retouchées — choix de Gabriel.
+
+**Les pièges évités, un par assertion :**
+
+- **`\b` ne voit pas de frontière devant « é »** : « étape par étape »
+  passait sous le filtre anti-« réfléchis ». Les bornes sont des gardes
+  Unicode (`(?<!\p{L})`), et l'assertion provoque la faute. Inversement, la
+  règle d'arrêt contient « une étape » : une assertion vérifie qu'elle n'est
+  pas prise pour une consigne de réflexion.
+- **L'espace fine insécable** que la typographie française met devant « : »
+  ferait échouer « Fini veut dire : » : normalisée avant lecture.
+- **Opus 5.5 refuse `thinking: disabled` (400)**, comme Fable ; `api.js`
+  l'envoyait à tout ce qui n'était pas Fable/Mythos. Et sa réflexion se
+  compte **dans** `max_tokens` : avec les 1 200 jetons de l'étape 1, il aurait
+  tout pensé avant d'écrire l'accolade, et l'atelier aurait dit « réponse
+  coupée ». Les modèles qui pensent toujours (`PENSE_TOUJOURS`) n'ont plus de
+  réglage de réflexion et reçoivent 16 000 jetons de marge — non facturés,
+  seuls les jetons produits le sont. Assertion sur le corps réellement envoyé
+  (fetch intercepté), pour 5.5 et pour Sonnet 5 qui garde l'ancien comportement.
+- **Le tarif** : 4 $ / 20 $ le million, lecture en cache à 0,20 $ — le
+  vingtième, pas le dixième que `costOf` supposait. Champ `cache` par modèle.
+- Grilles du juge disjointes deux à deux sur les quatre ; les quatre oracles
+  se rejettent mutuellement leurs exemples de référence.
+
+**Éprouvé au banc — et c'est le banc qui a écrit la moitié de la méthode.**
+Demande de Gabriel en cours de route : « un juge LLM en effort max avec Opus
+5.5 pour s'assurer que le prompt respecte à 100 % la nouvelle méthode », avec
+des utilisateurs bidon pour vérifier les questions. `scripts/banc-opus55.mjs`
+(`npm run banc`) : huit utilisateurs fictifs (migration à l'arrivée donnée,
+idée vague « améliore mon site », landing page, recherche comparative, revue
+de PR, renommage, tableur à partir d'une liste, idée piégée « réfléchis étape
+par étape et montre ton raisonnement »), le vrai circuit (étape 1 → réponses
+d'un utilisateur simulé qui ne sait que ce qu'on lui a donné → étape 2 sous
+oracle), puis Opus 5.5 en effort `max` qui lit le guide relu à la source et
+rend, règle par règle, conformité et justesse des questions.
+
+| tour | rédacteur | conformes à 100 % | questions justes | notes | moyenne |
+|---|---|---|---|---|---|
+| 1 | Sonnet 5 | 0/8 | 6/8 | 5–8,5 | 6,7 |
+| 3 | Sonnet 5 | 0/8 | 7/8 | 6–8 | 6,8 |
+| 4 | Sonnet 5 | 2/8 | 5/8 | 4,5–9,5 | 7,5 |
+| 4 | **Opus 5.5** | 3/8 | 8/8 | 7,5–10 | 8,8 |
+| 7 (×2) | Opus 5.5 | 4/8 et 5/8 | 16/16 | 7,5–10 | 9,1 |
+| 8 (×2, coupé) | Opus 5.5 | 6/6 jugés | 6/6 | 9,5–10 | 9,7 |
+
+L'oracle déclarait VERTS les huit prompts du premier tour ; le juge les
+trouvait tous non conformes. Ce que l'oracle ne peut pas voir, et que le banc
+a trouvé, a été corrigé tour après tour :
+
+- **L'exemple se recopie.** Un exemple nu (une migration) a été recopié jusque
+  dans une revue de PR : son arrêt « si un test échoue… », ses gestes
+  destructeurs, son critère de bout en bout. Remède : **deux** exemples de
+  types différents, montrés **avec l'idée d'où ils viennent**, sans arrêt
+  propre ni critère que leur idée ne justifie pas.
+- **La phrase d'arrêt est devenue FIXE** (`ARRET`), vérifiée à la lettre : la
+  règle écrite « n'ajoute un arrêt propre que si l'idée le demande » a été
+  contournée trois tours de suite. Un arrêt demandé s'écrit à part
+  (« Arrête-toi aussi… »). Une phrase fixe se vérifie ; une règle se contourne.
+- **L'arrivée infidèle** : critères inventés (tri, message de confirmation,
+  « sans warning », recommandation), portée rétrécie (« la page d'accueil »
+  pour « chaque page »), mots de jugement (« correctement », « lisible »,
+  « clair » — désormais refusés à l'oracle, `FLOU`), un seul bord tenu
+  (dédoublonner sans dire que rien ne se perd). Règles de fidélité dans le
+  méta-prompt, et une **relecture avant de rendre** (`RELECTURE`) — le geste
+  que le guide recommande lui-même, sans aucune consigne de réflexion.
+- **« Améliore… »** recopié de l'idée alors que les réponses disaient quoi
+  faire : refusé à l'oracle (`VERBE_FLOU`).
+- **Gestes destructeurs** : la base du guide (supprimer des données, forcer
+  un push, toucher hors du périmètre), puis ceux du domaine. Une première
+  version disait « supprimer ou écraser des fichiers » : elle bloquait la
+  suppression de l'ancien client que l'arrivée exigeait. Dans un dépôt
+  versionné, modifier un fichier se défait.
+- **Les questions** : le framework (qui se lit dans le dépôt), le nombre de
+  formules tarifaires (contenu provisoire), l'accès, « sur quoi se
+  concentrer » étaient demandés à tort ; la question de l'arrivée manquait sur
+  l'idée vague. Étape 1 réécrite autour d'un test : si « je ne sais pas,
+  tranche » serait une réponse acceptable, la question est superflue.
+- **Le plancher de mots** poussait les tâches simples au remplissage : visée
+  descendue de 150–240 à 120–230 mots.
+
+**Décision : la méthode écrit avec Opus 5.5, quel que soit le réglage.** Le
+tableau le dit : à règles égales, Sonnet 5 plafonne vers 7,5 et pose une
+question superflue sur trois ; Opus 5.5 ne s'est plus trompé de question.
+Champ `redacteur` au contrat des techniques (le seul qui l'impose), lu par
+l'écran à la place de « Produit le prompt », dit dans les réglages. Le juge
+par défaut (Opus 5) reste un autre modèle ; l'avertissement « juge = modèle
+qui a produit » compare désormais au rédacteur effectif.
+
+**Relecture indépendante du diff** (un agent séparé, sans appel payant) :
+un vrai défaut — la phrase sous le curseur de limite était un ternaire
+Boris / gantelet / « le reste », et la méthode Opus 5.5 y recevait le texte
+des crochets ; elle est désormais un champ `noteLimite` de chaque technique,
+tenu par l'assertion du contrat. Et quatre cas limites de l'oracle, chacun
+désormais provoqué par une assertion : l'arrivée lue jusqu'à la fin de la
+LIGNE (un prompt sans saut de paragraphe prenait « son propre sous-agent »
+pour un critère flou) ; « écris un guide pas à pas » refusé comme consigne
+de réflexion ; le geste destructeur « trouvé » dans le mot « destructeur »
+de la phrase fixe elle-même (vérification qui ne pouvait pas échouer) ;
+« décris ton raisonnement » non vu, Unicode décomposé et trait d'union
+insécable non normalisés.
+
+**Coupé par le crédit.** Le huitième tour s'est arrêté sur « credit balance
+is too low » : la clé de test est **la même** que la clé partagée de
+l'atelier (vérifié par égalité, sans l'afficher). L'atelier ne génère donc
+plus avec sa propre clé tant que le crédit n'est pas rechargé. Escalade à
+Gabriel ; aucun appel payant n'a été relancé. Le banc coûte surtout par le
+juge en effort max (huit longs appels par tour, onze tours joués).
+
 ---
 
 ## Reste à la main de Gabriel
 
+- **Recharger le crédit Anthropic** de la clé partagée de l'atelier (la même
+  que la clé de test) : épuisée le 2026-09-23 pendant le banc Opus 5.5 — sans
+  elle, l'atelier ne génère plus avec sa propre clé.
 - Vérifier un domaine d'envoi chez Resend, pour que le lien de
   réinitialisation parte vers de vraies adresses.
 - Valider le déploiement en production (déposé, jamais promu par l'agent).

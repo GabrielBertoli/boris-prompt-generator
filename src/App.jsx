@@ -68,6 +68,7 @@ const DEFAULTS = {
   charLimit: 3900,
   charLimitGauntlet: 2500,
   charLimitHooks: 3000,
+  charLimitOpus55: 2200,
 };
 
 function loadSettings() {
@@ -107,6 +108,10 @@ function loadSettings() {
       charLimitHooks: Number.isFinite(parsed.charLimitHooks)
         ? techniqueOf("hooks").capLimit(parsed.charLimitHooks)
         : DEFAULTS.charLimitHooks,
+      /* Quatrième case (2026-09-23), même règle. */
+      charLimitOpus55: Number.isFinite(parsed.charLimitOpus55)
+        ? techniqueOf("opus55").capLimit(parsed.charLimitOpus55)
+        : DEFAULTS.charLimitOpus55,
     };
   } catch {
     return DEFAULTS;
@@ -142,6 +147,10 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
      deux-là : plus une seule règle de méthode n'est écrite dans l'écran. */
   const T = useMemo(() => techniqueOf(settings.technique), [settings.technique]);
   const limite = T.capLimit(settings[T.cleReglage]);
+  /* Une technique peut imposer son rédacteur (Opus 5.5 écrit les prompts
+     de la méthode Opus 5.5 — mesuré, voir `techniques.js`). Sinon, le
+     réglage. */
+  const redacteur = T.redacteur || settings.writer;
 
   /* La clé personnelle prime ; à défaut, celle de l'atelier. */
   const apiKey = ownKey || sharedKey || "";
@@ -390,7 +399,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
   /* ---------- cœur : génération sous assertions ---------- */
   const generateVerified = (baseConvo, instruction) =>
     runVerifiedGeneration({
-      ask: (convo) => ask(convo, settings.writer, budget(limite)),
+      ask: (convo) => ask(convo, redacteur, budget(limite)),
       baseConvo,
       instruction,
       limit: limite,
@@ -473,7 +482,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     };
 
     try {
-      const raw = await ask([first], settings.writer, 1200);
+      const raw = await ask([first], redacteur, 1200);
       const parsed = parseJson(raw);
       const nextHistory = [first, { role: "assistant", content: raw }];
       setHistory(nextHistory);
@@ -1245,7 +1254,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           <div className="min-w-0 flex-1">
             <div className="eyebrow">Atelier Boris</div>
             <div className="mono truncate text-[11px]" style={{ color: "var(--muted-2)" }}>
-              {settings.writer} · juge {settings.judge}
+              {redacteur} · juge {settings.judge}
             </div>
           </div>
 
@@ -2646,6 +2655,8 @@ function SettingsSheet({
 }) {
   const [keyDraft, setKeyDraft] = useState(ownKey);
   const [email, setEmail] = useState(user.email || "");
+  const T = techniqueOf(settings.technique);
+  const redacteur = T.redacteur || settings.writer;
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [busy, setBusy] = useState(false);
@@ -2794,7 +2805,15 @@ function SettingsSheet({
             </option>
           ))}
         </select>
-        {settings.judge === settings.writer && (
+        {T.redacteur && (
+          <p className="note note-info mt-3">
+            {T.nom} : le prompt est toujours écrit par{" "}
+            {MODELS.find((m) => m.id === T.redacteur)?.label || T.redacteur}, quel que soit ce réglage.
+            Mesuré : il suit le guide qu'il applique bien mieux qu'un autre modèle.
+          </p>
+        )}
+
+        {settings.judge === redacteur && (
           <p className="note note-info mt-3">
             Le juge est le modèle qui a produit : les angles morts sont corrélés. Choisis-en un
             autre pour que l'audit serve à quelque chose.
@@ -2823,12 +2842,12 @@ function SettingsSheet({
               }
             />
             <p className="lede mt-2 text-[13px]">
-              Ce réglage descend, il ne monte pas : {t.hardLimit} caractères est un plafond dur.
-              {t.id === "boris"
-                ? " Il montait à 8000, et le vérificateur comparait à ce nombre-là — un prompt de plus de 4000 caractères en sortait « au vert »."
-                : t.id === "gauntlet"
-                  ? ` Le prompt du gantelet se mesure d'abord en MOTS — ${t.fenetre().lo} à ${t.fenetre().hi} — et le plafond en caractères n'est là que pour arrêter un débordement franc.`
-                  : " Cinq sections et des crochets d'une ligne : si ça déborde, c'est le monde ou le fond qui s'est mis à raconter, jamais les crochets."}
+              Ce réglage descend, il ne monte pas : {t.hardLimit} caractères est un plafond dur.{" "}
+              {/* La phrase vient de la technique : écrite ici en ternaire, elle
+                  a donné le texte des crochets à la méthode Opus 5.5 — tout ce
+                  qui n'était ni Boris ni le gantelet tombait dans la dernière
+                  branche. */}
+              {t.noteLimite}
             </p>
           </div>
         ))}

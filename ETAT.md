@@ -24,6 +24,45 @@ palier à 1800 px, mais il mesure des hauteurs — il ne clique pas.
 Déploiement précédent : 2026-08-02, commit `e87cbf3`, 228 au harnais + 142 au
 pilotage.
 
+## 2026-09-23 — quatrième technique : la méthode Opus 5.5
+
+**⚠ À LA MAIN DE GABRIEL, EN PREMIER : le crédit Anthropic est épuisé.** La
+clé de test (`.env`) est la même que la clé partagée de l'atelier
+(`ANTHROPIC_SHARED_KEY`, vérifié par égalité sans l'afficher). Le banc Opus
+5.5 l'a vidée le 2026-09-23 (« credit balance is too low ») : tant qu'elle
+n'est pas rechargée, **l'atelier ne génère plus avec sa propre clé** — seul
+un visiteur qui colle la sienne passe. Aucun appel payant n'a été relancé
+après la coupure.
+
+Ce qui est fait (motifs : `DECISIONS.md` § 31) :
+
+- `src/opus55.js` — la méthode tirée du guide d'Anthropic sur Opus 5.5 :
+  cinq mouvements en prose (tâche entière, « Fini veut dire : », règle
+  d'arrêt fixe, clauses du type, « Termine par trois titres : Bloqué sur moi,
+  Changé, Trouvé. »), 120–230 mots, deux exemples montrés avec leur idée,
+  relecture avant de rendre, étape 1 à deux questions au plus.
+- La méthode **écrit avec Opus 5.5** quel que soit le réglage (`redacteur`
+  au contrat, dit dans les réglages) — mesuré au banc.
+- Opus 5.5 au choix des modèles (4 $ / 20 $, cache 0,20 $). `api.js` : plus
+  de `thinking: disabled` pour les modèles qui pensent toujours (Opus 5.5
+  répondait 400), et 16 000 jetons de marge pour leur réflexion.
+- Aide : seize chapitres, « Les quatre techniques », chapitre Opus 5.5.
+- `npm run verify` : **424 assertions au vert avec la clé** (dont une
+  génération réelle écrite par Opus 5.5, verte du premier coup), **408 hors
+  ligne** après la coupure du crédit et la relecture indépendante du diff
+  (un texte d'écran faux et quatre cas limites de l'oracle, corrigés —
+  `DECISIONS.md` § 31).
+- `npm run banc` : le banc à huit utilisateurs fictifs et juge Opus 5.5 en
+  effort max. Dernier tour complet : 5/8 conformes à 100 %, 8/8 questions
+  justes, notes 7,5–10 (moyenne 9,1) ; tour suivant coupé par le crédit,
+  6/6 jugés conformes.
+
+Ce qui reste :
+
+1. Recharger le crédit (Gabriel), puis `npm run banc` une fois en entier pour
+   confirmer le dernier tour, et `npm run verify` avec la clé.
+2. Production : non promue — `vercel deploy --prod` reste à Gabriel.
+
 ## 2026-09-04, fermeture de session — état des lieux
 
 Arbre propre dans les deux dépôts, tout est commité et poussé :

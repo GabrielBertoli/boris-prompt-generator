@@ -123,6 +123,7 @@ export function parseJson(text) {
    qui a produit, les angles morts seraient corrélés (règle du playbook). */
 export const MODELS = [
   { id: "claude-sonnet-5", label: "Sonnet 5", note: "rapide, produit" },
+  { id: "claude-opus-5-5", label: "Opus 5.5", note: "profond, pense toujours, moins cher qu'Opus 5" },
   { id: "claude-opus-5", label: "Opus 5", note: "profond, tranche" },
   { id: "claude-fable-5", label: "Fable 5", note: "le plus fort, le plus cher" },
   { id: "claude-haiku-4-5", label: "Haiku 4.5", note: "économique" },
@@ -132,7 +133,11 @@ export const MODELS = [
    prix catalogue au 2026-08. Le compteur est un ordre de grandeur
    honnête, pas une facture : les remises de lancement et le cache
    ne sont pas modélisés. */
+/* `cache` : le prix d'une lecture en cache quand il n'est pas le dixième
+   de l'entrée. Opus 5.5 la facture 0,20 $ pour une entrée à 4 $ — le
+   vingtième ; le calcul par défaut l'aurait comptée double. */
 export const PRICES = {
+  "claude-opus-5-5": { in: 4, out: 20, cache: 0.2 },
   "claude-sonnet-5": { in: 3, out: 15 },
   "claude-opus-5": { in: 5, out: 25 },
   "claude-fable-5": { in: 10, out: 50 },
@@ -145,7 +150,7 @@ export function costOf(model, usage) {
   const input = (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0);
   const cached = usage.cache_read_input_tokens || 0;
   return (
-    (input * price.in + cached * price.in * 0.1 + (usage.output_tokens || 0) * price.out) / 1e6
+    (input * price.in + cached * (price.cache ?? price.in * 0.1) + (usage.output_tokens || 0) * price.out) / 1e6
   );
 }
 

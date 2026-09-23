@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "verify": "node scripts/verify.mjs",
     "pilotage": "node scripts/pilotage.mjs",
-    "seed": "node scripts/seed.mjs"
+    "seed": "node scripts/seed.mjs",
+    "banc": "node scripts/banc-opus55.mjs"
   },
   "dependencies": {
     "react": "^19.2.0",

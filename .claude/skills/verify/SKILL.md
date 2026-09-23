@@ -91,6 +91,25 @@ Marquer l'idée d'un jeton (`PILOTAGE-<horodatage>`), puis supprimer les
 entrées créées par l'interface en fin de campagne, et recharger pour
 confirmer leur disparition.
 
+## 3. Le banc Opus 5.5 — `npm run banc`
+
+`scripts/banc-opus55.mjs` : huit utilisateurs fictifs (migration, idée vague,
+design, recherche, revue, tâche simple, tableur, idée piégée « réfléchis
+étape par étape ») passent par le vrai circuit de la méthode Opus 5.5 —
+étape 1 comme l'écran, réponses simulées si des questions tombent, étape 2
+sous assertions — puis un juge **Opus 5.5 en effort max** lit le guide
+d'Anthropic (relu à la source, jamais copié dans le dépôt) et rend, règle par
+règle, conformité du prompt ET justesse des questions. Il prouve ce que
+l'oracle ne peut pas : qu'une clause s'applique, qu'une question était la
+bonne. Payant (le juge surtout) : hors de `npm run verify`, à rejouer après
+chaque retouche de `src/opus55.js`.
+
+```bash
+npm run banc                          # les huit cas, rédacteur Sonnet 5
+npm run banc -- --cas vague,design    # quelques cas
+npm run banc -- --rédacteur claude-opus-5-5
+```
+
 ## Escalade
 
 Production, domaine, suppression de données : décision de Gabriel.

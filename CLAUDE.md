@@ -20,7 +20,7 @@ Rejoue en preview réelle, vraie clé de test, vraie boîte mail de test : prén
 - **Le dépôt non plus** : aucun code d'accès en clair dans un fichier suivi par git, documentation comprise. Le dépôt est public, et un code lisible ouvre une session — qui reçoit la clé Anthropic commune. Mesuré le 2026-08-02 : les cinq codes y étaient depuis le premier commit ; réémis, purgés, et `npm run verify` échoue désormais si un code réapparaît dans un fichier suivi.
 - Les secrets serveur vivent en variables Vercel, jamais en VITE_*, jamais commités.
 - La clé API du visiteur reste dans son navigateur ; ses appels partent en direct.
-- L'atelier embarque TROIS techniques, et une seule règle : chacune expose le même contrat, aucune ne s'écrit dans l'écran. Méthode Boris (huit sections), boucle du gantelet (sept mouvements, une barre réelle à battre) et pile de crochets (cinq sections, l'interdit retiré du monde, l'ordre est l'autorité). Le dépôt est la source de vérité. Serverless minimal : l'accès, rien d'autre.
+- L'atelier embarque QUATRE techniques, et une seule règle : chacune expose le même contrat, aucune ne s'écrit dans l'écran. Méthode Boris (huit sections), boucle du gantelet (sept mouvements, une barre réelle à battre), pile de crochets (cinq sections, l'interdit retiré du monde, l'ordre est l'autorité) et méthode Opus 5.5 (cinq mouvements en prose, la preuve est la ligne d'arrivée, les arrêts sont nommés). Le dépôt est la source de vérité. Serverless minimal : l'accès, rien d'autre.
 
 # ENVIRONNEMENT
 Personne ne répondra : tu tranches, tu écris l'hypothèse dans le dépôt, tu continues. L'état du run vit dans le dépôt : reprise après coupure. CLI Vercel authentifié ; clé de test dans .env jamais commitée ; fournisseur d'email et clé-valeur en variables Vercel ; boîte mail de test accessible. Supprime au fil de l'eau ce qui ne sert plus.
@@ -74,6 +74,21 @@ Tous les parcours passent en preview, assertions au vert bundle et mail compris 
   Boris accepte un prompt de crochets** — c'est la technique enregistrée sur
   l'entrée qui protège, pas l'oracle. Les tirets « — », « – » et « - » sont
   normalisés avant lecture, sauf en tête de ligne (puce du retrait).
+- **Quatre techniques depuis le 2026-09-23** : la **méthode Opus 5.5**
+  (`src/opus55.js`, `id: "opus55"`), tirée du guide d'Anthropic sur Opus 5.5 —
+  `DECISIONS.md` § 31. Trois leçons payées au banc (`npm run banc`, juge Opus
+  5.5 en effort max) : **l'oracle déclarait verts huit prompts que le juge
+  trouvait tous non conformes** (critères inventés, arrêts recopiés de
+  l'exemple, clauses plaquées) — la forme se vérifie, la fidélité se juge ;
+  **un exemple nu se recopie**, contenu compris — on le montre avec l'idée
+  d'où il vient ; **une règle se contourne, une phrase fixe se vérifie** (la
+  phrase d'arrêt `ARRET`). Elle contredit sciemment Boris et les crochets sur
+  un point : pour 5.5, nommer les arrêts est LA consigne utile. Elle **écrit
+  avec Opus 5.5** quel que soit le réglage (`redacteur` au contrat, mesuré).
+  Piège d'API : Opus 5.5 refuse `thinking: disabled` (400) et sa réflexion se
+  compte dans `max_tokens` — `PENSE_TOUJOURS` + 16 000 jetons de marge dans
+  `api.js`. **La clé de test EST la clé partagée de l'atelier** : un banc qui
+  la vide coupe l'atelier (arrivé le 2026-09-23).
 - **Le gantelet écrit autour de 2500 caractères depuis le 2026-08-26**
   (`DECISIONS.md` § 29), et la leçon tient en une phrase : **sa longueur se
   règle en MOTS, jamais en caractères seuls**. Monter le plafond sans monter la
@@ -83,9 +98,11 @@ Tous les parcours passent en preview, assertions au vert bundle et mail compris 
   1700 — tout dans `src/gauntlet.js`, et nulle part ailleurs. Un chiffre de
   longueur recopié à l'écran ou dans une assertion est une bombe à retardement
   VERTE : sept l'ont été, tous supprimés ce jour-là.
-- **Deux instruments de vérification**, et le skill `/verify` du dépôt
+- **Trois instruments de vérification**, et le skill `/verify` du dépôt
   (`.claude/skills/verify/SKILL.md`) dit lequel prouve quoi :
-  1. `npm run verify` — **341 assertions en local** au 2026-09-04 (290 au
+  1. `npm run verify` — **424 assertions en local** au 2026-09-23, 408 sans
+     clé API (341 au
+     2026-09-04, 290 au
      2026-08-26, 112 au 2026-08-02), au vert
      (les parcours d'accès s'y ajoutent quand `BASE_URL` est fourni : 122
      sur la production le 2026-08-01). Rien ne se déclare sans l'avoir
@@ -103,6 +120,10 @@ Tous les parcours passent en preview, assertions au vert bundle et mail compris 
   2. Le pilotage réel (Playwright, `channel: "chrome"`, installé hors du
      dépôt) — le seul qui prouve un parcours au clic et les paliers
      mobiles. C'est lui qui a trouvé le débordement de 15 px à 320 px.
+  3. `npm run banc` — le banc de la méthode Opus 5.5 : utilisateurs fictifs,
+     vrai circuit, juge Opus 5.5 en effort max contre le guide relu à la
+     source. Le seul qui prouve la FIDÉLITÉ d'un prompt et la justesse des
+     questions. Payant, et sur la clé partagée : à lancer en le sachant.
 - Deux règles de produit posées le 2026-08-02, motivées dans `DECISIONS.md`
   § 19 et § 20 : **aucun prompt au-dessus de 3950 caractères ne sort de
   l'atelier** (plafond dans `verifyPrompt`, pas dans le réglage), et **tout
