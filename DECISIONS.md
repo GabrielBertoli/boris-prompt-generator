@@ -1150,5 +1150,3 @@ Relectures séparées des deux côtés ; constats corrigés. `npm run verify` :
   la clé commune.
 - Vérifier un domaine d'envoi chez Resend, pour que le lien de
   réinitialisation parte vers de vraies adresses.
-- Valider la mise en production des changements du § 35 (la production du
-  2026-09-23 a été promue à sa demande ; celle-ci attend son accord).

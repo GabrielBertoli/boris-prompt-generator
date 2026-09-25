@@ -2,7 +2,15 @@
 
 **EN PRODUCTION** — https://boris-prompt-generator.vercel.app
 
-Dernier déploiement : **2026-09-23, promu à la demande explicite de Gabriel**
+Dernier déploiement : **2026-09-25, à la demande de Gabriel (« vas-y »)**,
+commit `06c2aef` (DECISIONS § 35 : harnais Opus 5.5 des quatre techniques).
+Vérifié sur l'alias stable sans `VERIFY_CODE` ni clé : **567 assertions au
+vert, 0 échec** ; bundle servi `index-yW8qO7oj.js`, identique au build local.
+Même jour : la carte SSH « MyERP SSH Distant Claude » arrêtée (■ Stop SSH) et
+relancée par la Tour avec la consigne d'arrêt en prompt système et la relance
+armée (run `run-32787bfc4345`, cycle de reprise 12).
+
+Déploiement d'avant : **2026-09-23, promu à la demande explicite de Gabriel**
 (« mets-le à jour »), commit `3de2662` et suivants, poussés sur `origin/main`.
 Vérifié sur l'alias stable **sans** `VERIFY_CODE` ni clé API (crédit épuisé) :
 437 assertions au vert — bundle servi identique au build local
@@ -34,7 +42,7 @@ pilotage.
 
 Motifs : `DECISIONS.md` § 35. Audit : `reprise/AUDIT-DOC-OFFICIELLE.md`.
 
-Fait, **pas encore en production** (attend l'accord de Gabriel) :
+Fait, **en production le 2026-09-25** :
 - harnais partagé des quatre techniques (`src/harnais.js`) : textes
   collés balisés + note en `system`, cache sur le premier bloc, un seul
   effort par conversation, refus lus et comptés, message juste quand la
@@ -55,7 +63,6 @@ Ouvert :
   détail et pistes dans `reprise/NOTES-OPUS55.md` ;
 - non testable sans crédit : sorties structurées, effort par message,
   preuve réelle du cache (`reprise/NOTES-HARNAIS.md`) ;
-- production : à déposer en validation.
 
 ## 2026-09-23 — quatrième technique : la méthode Opus 5.5
 
