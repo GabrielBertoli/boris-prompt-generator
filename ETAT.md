@@ -38,6 +38,13 @@ palier à 1800 px, mais il mesure des hauteurs — il ne clique pas.
 Déploiement précédent : 2026-08-02, commit `e87cbf3`, 228 au harnais + 142 au
 pilotage.
 
+## Reprise — fin de session du 2026-09-25
+
+Point de reprise complet : `reprise/BRIEF.md` (livré, ouvert, vérifications).
+En bref : production à jour et vérifiée ; Tour Unifiée branchée (consigne d'arrêt,
+relances, garde d'effort, sous-agent max) ; trois cas rouges au banc Opus 5.5 restent
+le seul chantier de l'agent ; le reste attend le crédit API ou Gabriel.
+
 ## 2026-09-25 — l'atelier aligné sur la doc officielle d'Opus 5.5
 
 Motifs : `DECISIONS.md` § 35. Audit : `reprise/AUDIT-DOC-OFFICIELLE.md`.
