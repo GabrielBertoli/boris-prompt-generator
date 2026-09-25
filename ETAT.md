@@ -30,6 +30,33 @@ palier à 1800 px, mais il mesure des hauteurs — il ne clique pas.
 Déploiement précédent : 2026-08-02, commit `e87cbf3`, 228 au harnais + 142 au
 pilotage.
 
+## 2026-09-25 — l'atelier aligné sur la doc officielle d'Opus 5.5
+
+Motifs : `DECISIONS.md` § 35. Audit : `reprise/AUDIT-DOC-OFFICIELLE.md`.
+
+Fait, **pas encore en production** (attend l'accord de Gabriel) :
+- harnais partagé des quatre techniques (`src/harnais.js`) : textes
+  collés balisés + note en `system`, cache sur le premier bloc, un seul
+  effort par conversation, refus lus et comptés, message juste quand la
+  réflexion mange le budget ;
+- bloc « réglages conseillés » sous chaque prompt, exports
+  `REGLAGES_AGENT`, `CONSIGNE_ARRET_SYSTEME`, `LIGNE_TEMPS_COMPTE`,
+  `RELANCE_POINTS_OUVERTS` — **importés par la Tour Unifiée** ;
+- méthode Opus 5.5 : source = doc officielle, deux modes (seul / suivi),
+  clause d'exploration multi-applis ; banc jugé contre la doc ;
+- rédaction et questions en `medium` (mesuré : 7/10 contre 5/10 en high).
+
+Preuves : `npm run verify` 548 ✓ / 0 ✗ (sans clé) ; banc complet 7/10
+conformes en `medium` ; relectures séparées, constats corrigés.
+
+Ouvert :
+- trois cas rouges au banc (`vague`, `suivi`, `multiapps`) — une première
+  série de correctifs a régressé le banc complet (4/10), retirée ;
+  détail et pistes dans `reprise/NOTES-OPUS55.md` ;
+- non testable sans crédit : sorties structurées, effort par message,
+  preuve réelle du cache (`reprise/NOTES-HARNAIS.md`) ;
+- production : à déposer en validation.
+
 ## 2026-09-23 — quatrième technique : la méthode Opus 5.5
 
 **⚠ À LA MAIN DE GABRIEL, EN PREMIER : le crédit Anthropic est épuisé.** La

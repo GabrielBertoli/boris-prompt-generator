@@ -1077,6 +1077,70 @@ oh-my-claudecode, qui se régénère), le `CLAUDE.md` racine de `L'Oreal`, et
 
 ---
 
+## 35. La doc officielle d'Opus 5.5 : le levier est dans le harnais, pas dans le prompt
+
+Demande de Gabriel le 2026-09-24/25 : vérifier l'atelier contre le guide
+officiel (platform.claude.com, *Prompting Claude Opus 5.5* et le guide de
+migration), puis appliquer « en une seule fois sur la totalité », Tour
+Unifiée comprise. Audit : `reprise/AUDIT-DOC-OFFICIELLE.md` ; extraits
+verbatim : `reprise/GUIDE-OPUS55-SOURCE.md`.
+
+Constat : la méthode Opus 5.5 (§ 31) avait été tirée du billet claude.dev,
+pas de la doc officielle. D'où une méthode centrée sur le texte du prompt,
+muette sur les réglages et le harnais, que la doc désigne comme le vrai
+levier (« un prompt Opus 5 marche tel quel »).
+
+Deux arbitrages, pris par l'agent (Gabriel : « tout ») :
+- **La méthode est ALIGNÉE, pas réécrite.** Source : la doc officielle ;
+  le billet n'est plus que l'origine. Deux modes (seul : `CONTINUE` +
+  `ARRET` ; suivi : `INTENTION` + `DEMANDE`), exclusifs à l'oracle ;
+  clause `EXPLORE` pour les tâches multi-applications seulement.
+- **Boris, gantelet et crochets gardent leur texte.** La consigne
+  anti-arrêt du guide est un PROMPT SYSTÈME posé au lancement : c'est du
+  harnais. Elle arrive par le bloc commun et par la Tour, pour les quatre
+  techniques — la règle « aucune correction comportementale dans le
+  prompt » des méthodes à sections ne la contredit plus.
+
+Harnais de l'atelier (vaut pour les quatre techniques, `src/harnais.js`) :
+textes collés balisés `<pasted_content id>` + note du guide en `system` ;
+`cache_control` sur le premier bloc (méthode + idée) ; un seul effort par
+conversation (les questions prennent celui de la rédaction) ; message juste
+quand la réflexion mange le budget ; catégorie de refus lue
+(`stop_details`) et refus facturés comptés ; bloc commun `REGLAGES_AGENT`
+affiché sous chaque prompt (effort, `CONSIGNE_ARRET_SYSTEME` verbatim,
+relance `RELANCE_POINTS_OUVERTS`, `LIGNE_TEMPS_COMPTE`, rappel de silence).
+Reportés faute de crédit (non testables) : sorties structurées pour le JSON,
+effort par message (bêta), preuve réelle des lectures en cache.
+
+Harnais de la Tour Unifiée (autre dépôt, son `CLAUDE.md` du 2026-09-25) :
+`--append-system-prompt` avec la consigne dès le lancement de toute mission
+Claude autonome, locale ou SSH (jamais pour Chat / à côté / Prompting) ;
+relance des points ouverts par crochets Claude Code (`Stop` +
+`TaskCreated`/`TaskCompleted`/`PostToolUse`), plafond 2 ; option
+`tempsCompte`. Les textes sont IMPORTÉS de `src/techniques.js` : renommer
+ces quatre exports casse la Tour sans qu'aucune assertion d'ici ne le voie.
+
+Effort MESURÉ au banc (10 cas, juge Opus 5.5 `high` contre la doc
+officielle, abonnement Max) : rédaction `medium` 7/10 conformes, `high`
+5/10. La rédaction — et donc les questions, même conversation — passe en
+`medium`, le défaut du modèle, comme le guide le demande. Le juge reste
+`high` (non mesuré).
+
+Trois cas restent rouges aux deux efforts : `vague` (l'arrivée ne tient
+qu'un bord), `suivi` (les gestes nommés bloquent le livrable),
+`multiapps` (l'envoi, geste central, n'est pas nommé). Une série de
+correctifs les a fait passer tous les trois… et a fait tomber le banc
+complet à 4/10 (nouveaux rouges sur migration, design, recherche,
+piège). **Retirée** : on livre la version à 7/10, et ces trois cas sont un
+chantier ouvert (`reprise/NOTES-OPUS55.md`). Leçon : un correctif ciblé se
+juge sur le banc COMPLET, jamais sur les seuls cas qu'il vise — et le juge
+varie d'un passage à l'autre (un même cas passe de 7 à 9,5).
+
+Relectures séparées des deux côtés ; constats corrigés. `npm run verify` :
+548 ✓ / 0 ✗. `./fini.sh` (Tour) : VERT.
+
+---
+
 ## Reste à la main de Gabriel
 
 - **Le crédit de la clé partagée de l'atelier** est épuisé depuis le
@@ -1086,4 +1150,5 @@ oh-my-claudecode, qui se régénère), le `CLAUDE.md` racine de `L'Oreal`, et
   la clé commune.
 - Vérifier un domaine d'envoi chez Resend, pour que le lien de
   réinitialisation parte vers de vraies adresses.
-- Valider le déploiement en production (déposé, jamais promu par l'agent).
+- Valider la mise en production des changements du § 35 (la production du
+  2026-09-23 a été promue à sa demande ; celle-ci attend son accord).

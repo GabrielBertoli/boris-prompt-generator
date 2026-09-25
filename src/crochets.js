@@ -40,6 +40,7 @@
    ================================================================ */
 
 import { countChars, targetWindow, HARD_LIMIT } from "./meta.js";
+import { conversationDe } from "./harnais.js";
 
 export { HARD_LIMIT, countChars };
 
@@ -405,16 +406,8 @@ export function correctionInstruction(demand, limit) {
   );
 }
 
-export function baseConvoFor({ idea, prompt, limit }) {
-  const convo = [
-    {
-      role: "user",
-      content:
-        buildMeta(limit) +
-        "\n\nIDÉE :\n" +
-        (String(idea || "").trim() || "(idée non conservée — pars du prompt ci-dessous)"),
-    },
-  ];
-  if (prompt) convo.push({ role: "assistant", content: prompt });
-  return convo;
+/* Le fil reconstruit : premier tour commun aux quatre techniques (idée
+   enveloppée, bloc en cache — harnais.js). */
+export function baseConvoFor({ idea, prompt, limit, id }) {
+  return conversationDe({ meta: buildMeta(limit), etiquette: "IDÉE", idee: idea, id, prompt });
 }

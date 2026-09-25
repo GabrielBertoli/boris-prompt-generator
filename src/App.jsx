@@ -28,6 +28,9 @@ import {
   estTechnique,
   techniqueOf,
 } from "./techniques.js";
+/* Le harnais partagé : l'enveloppe des textes collés, le point de cache,
+   la note système. Mêmes règles pour les quatre techniques. */
+import { SYSTEME_ATELIER, idCollage, premierTour } from "./harnais.js";
 import { createPortal } from "react-dom";
 import { MAX_ATTEMPTS, runVerifiedGeneration } from "./generate.js";
 import {
@@ -225,6 +228,10 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
      façon de reprendre la main était de recharger la page — et de perdre
      ce qui n'était pas encore enregistré. */
   const arretRef = useRef(null);
+  /* L'identifiant des balises de texte collé : tiré UNE fois par entrée
+     (idée neuve, prompt rouvert) et gardé pour tous ses appels — le
+     premier bloc reste identique, donc le cache sert. */
+  const collageRef = useRef(idCollage());
   const [arretable, setArretable] = useState(false);
 
   /* Le fil de correction : ce qu'on a demandé, ce qui est sorti. Il vit
@@ -353,6 +360,9 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
           model,
           maxTokens,
           effort,
+          /* La note des textes collés, dès le premier appel de chaque
+             conversation et jamais changée en route (harnais.js). */
+          system: SYSTEME_ATELIER,
           /* Le texte s'affiche pendant qu'il arrive : une minute d'attente
              devient lisible au lieu de ressembler à un blocage. */
           onDelta: setStream,
@@ -365,6 +375,13 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
         });
         addCost(role, costOf(model, usage));
         return text;
+      } catch (error) {
+        /* Un refus est facturé : Anthropic compte les jetons produits
+           avant de refuser. api.js joint cet usage à l'erreur — seul
+           chemin où une erreur en porte un — donc rien d'autre ici ne
+           compte deux fois. */
+        if (error?.usage) addCost(role, costOf(model, error.usage));
+        throw error;
       } finally {
         setStream("");
       }
@@ -421,6 +438,12 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     "un prompt hors limite est refusé par l'agent à qui tu le donnes. " +
     "Relance, ou resserre l'idée de départ : une idée très large produit un prompt long.";
 
+  /* L'idée telle qu'on la colle au modèle : le texte, puis les
+     contraintes. Une seule forme pour le premier message et pour le fil
+     reconstruit. */
+  const ideeComplete = () =>
+    idea.trim() + (constraints.trim() ? "\n\nCONTRAINTES IMPOSÉES :\n" + constraints.trim() : "");
+
   /* ---------- phase 1 : ce qui manque avant d'écrire ----------
      Boris demande les informations matérielles ; le gantelet propose des
      barres. Même contrat dans les deux cas : si rien ne manque — aucune
@@ -462,20 +485,26 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     setMesure("");
     setPhase("analyzing");
     ouvrirArret();
+    collageRef.current = idCollage();
 
     /* Plus de mode déclaré : l'idée dit d'elle-même si l'agent part de zéro
        ou s'intègre à un terrain existant. Imposer « nouvelle start-up » par
        défaut aurait mal cadré toutes les idées du second type. */
-    const first = {
-      role: "user",
-      content:
-        T.buildMeta(limite) +
-        "\n\nIDÉE :\n" +
-        idea.trim() +
-        (constraints.trim() ? "\n\nCONTRAINTES IMPOSÉES :\n" + constraints.trim() : "") +
-        "\n\n" +
-        T.etape1.instruction(),
-    };
+    /* L'idée et ses contraintes sont un texte collé : enveloppées, dans le
+       bloc en cache avec la méthode. L'instruction d'étape 1 suit, hors
+       du cache. Même forme que le fil reconstruit (`ideeComplete`), pour
+       que le premier bloc soit le même avant et après une correction.
+       L'étiquette vient de LA TECHNIQUE (« BUT » au gantelet, « IDÉE »
+       ailleurs) : l'écrire en dur ici referait diverger ce premier bloc
+       de celui que `baseConvoFor` pose au rechargement — payé le
+       2026-09-25. */
+    const first = premierTour({
+      meta: T.buildMeta(limite),
+      etiquette: T.etiquette,
+      idee: ideeComplete(),
+      id: collageRef.current,
+      suite: "\n\n" + T.etape1.instruction(),
+    });
 
     try {
       const raw = await ask([first], MODELE, 1200, "writer", ROLES.questions.effort);
@@ -672,11 +701,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
     setAudit(null);
     const convo = history.length
       ? history
-      : T.baseConvoFor({
-          idea: idea + (constraints.trim() ? `\n\nCONTRAINTES IMPOSÉES :\n${constraints.trim()}` : ""),
-          prompt,
-          limit: limite,
-        });
+      : T.baseConvoFor({ idea: ideeComplete(), prompt, limit: limite, id: collageRef.current });
     ouvrirArret();
     try {
       await juger({ convo, texte: prompt });
@@ -896,11 +921,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
          accumulée : le modèle voit la méthode, l'idée et le dernier état.
          C'est borné en coût, et surtout identique avant et après un
          rechargement — le fil se comporte pareil dans les deux cas. */
-      const base = T.baseConvoFor({
-        idea: idea + (constraints.trim() ? `\n\nCONTRAINTES IMPOSÉES :\n${constraints.trim()}` : ""),
-        prompt,
-        limit: limite,
-      });
+      const base = T.baseConvoFor({ idea: ideeComplete(), prompt, limit: limite, id: collageRef.current });
       const res = await generateVerified(base, T.correctionInstruction(asked, limite));
 
       setHistory(res.convo);
@@ -986,6 +1007,7 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
      parfaitement valide. */
   const resumeThread = (item) => {
     const Titem = techniqueOf(item.technique);
+    collageRef.current = idCollage();
     if (item.technique && item.technique !== settings.technique) {
       setSettings((s) => ({ ...s, technique: Titem.id }));
     }
@@ -1876,6 +1898,11 @@ export default function App({ user, sharedKey, onUser, onLeave }) {
                 </div>
 
                 {libError && <p className="note note-error mt-4">{libError}</p>}
+
+                {/* Les réglages conseillés : le contrat de la technique
+                    (T.reglages — le même bloc pour les quatre), affiché
+                    tel quel. */}
+                <ReglagesAgent reglages={T.reglages} />
               </>
             )}
 
@@ -2565,6 +2592,61 @@ const arcDe = (de, a) => {
   const [x2, y2] = pointDe(a);
   return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${R} ${R} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
 };
+
+/* ---------- les réglages conseillés, sous le prompt ----------
+   Replié par défaut : le prompt reste la pièce, les réglages sont ce
+   qu'on lit en le lançant. L'écran ne connaît ni l'effort, ni la règle
+   d'arrêt, ni la relance — il parcourt les rubriques du contrat
+   (`REGLAGES_AGENT`, harnais.js). Tout texte à coller porte son bouton
+   copier, la règle d'arrêt la première. */
+function ReglagesAgent({ reglages }) {
+  const [ouvert, setOuvert] = useState(false);
+  const [copie, setCopie] = useState("");
+  if (!reglages?.rubriques?.length) return null;
+  return (
+    <div className="reglages-agent mt-5">
+      <button
+        className="reglages-tete"
+        type="button"
+        aria-expanded={ouvert}
+        onClick={() => setOuvert((v) => !v)}
+      >
+        <span className="reglages-titre">{reglages.titre}</span>
+        <span className="reglages-signe" aria-hidden="true">
+          {ouvert ? "−" : "+"}
+        </span>
+      </button>
+      {!ouvert && reglages.resume && <p className="reglages-resume">{reglages.resume}</p>}
+      {ouvert && (
+        <div className="reglages-corps">
+          {reglages.rubriques.map((r) => (
+            <div key={r.cle} className="reglages-rubrique" data-rubrique={r.cle}>
+              <p className="reglages-nom">{r.titre}</p>
+              <p className="reglages-texte">{r.texte}</p>
+              {r.copie && (
+                <>
+                  <pre className="reglages-copie">{r.copie}</pre>
+                  <button
+                    className="btn btn-quiet mt-2"
+                    type="button"
+                    onClick={async () => {
+                      if (await copy(r.copie)) {
+                        setCopie(r.cle);
+                        setTimeout(() => setCopie(""), 2000);
+                      }
+                    }}
+                  >
+                    {copie === r.cle ? "Copié ✓" : "Copier"}
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function JaugeNote({ note, encours }) {
   const valeur = note ? note.note : null;

@@ -18,6 +18,14 @@
 
    Le contrat, dans l'ordre où l'atelier s'en sert :
      id, nom, resume, quand      — l'identité, montrée au choix
+     etiquette                   — le mot qui présente l'idée au premier
+                                    tour (« IDÉE » par défaut, « BUT » au
+                                    gantelet) : App.jsx le lit ici plutôt
+                                    que de l'écrire en dur, sans quoi
+                                    l'analyse et le fil reconstruit
+                                    (`baseConvoFor`) posent un premier
+                                    bloc différent pour une même entrée —
+                                    payé le 2026-09-25.
      limiteDefaut/Min/hardLimit  — la longueur, et son plafond dur
      noteLimite                  — la phrase sous son curseur, aux réglages
      capLimit(n)                 — rabat un réglage dans les bornes
@@ -31,12 +39,29 @@
      auditApplyInstruction(...)  — appliquer l'audit
      correctionInstruction(...)  — une correction demandée à la main
      baseConvoFor({...})         — reconstruire le fil après rechargement
+     reglages                    — les réglages conseillés sous le prompt :
+                                   REGLAGES_AGENT, le MÊME objet pour les
+                                   quatre (harnais.js), jamais une copie
    ================================================================ */
 
 import * as boris from "./meta.js";
 import * as gauntlet from "./gauntlet.js";
 import * as crochets from "./crochets.js";
 import * as opus55 from "./opus55.js";
+import { REGLAGES_AGENT } from "./harnais.js";
+
+/* Le harnais partagé, ré-exporté ici sous des noms FIGÉS : la Tour
+   Unifiée charge ce module (import dynamique, hors navigateur) et lit
+   ces noms-là. Les renommer casse la Tour sans qu'aucune assertion d'ici
+   ne le voie. */
+export {
+  REGLAGES_AGENT,
+  CONSIGNE_ARRET_SYSTEME,
+  LIGNE_TEMPS_COMPTE,
+  RELANCE_POINTS_OUVERTS,
+  RAPPEL_SILENCE,
+  NOTE_TEXTE_COLLE,
+} from "./harnais.js";
 
 /* ---------- méthode Boris ----------
 
@@ -55,6 +80,7 @@ const BORIS = {
   quand: "Tu confies une construction longue : une app, un ERP, un algo, un service. Prompt long et structuré, huit sections, l'oracle est dedans.",
   unite: "car.",
   sortie: "un prompt de huit sections",
+  etiquette: "IDÉE",
   /* Où vit SA limite dans les réglages : les deux techniques n'ont ni le
      même ordre de grandeur ni le même plafond, et un curseur partagé
      ferait suivre à l'une le réglage choisi pour l'autre. */
@@ -123,6 +149,7 @@ const BORIS = {
 
   correctionInstruction: boris.correctionInstruction,
   baseConvoFor: boris.baseConvoFor,
+  reglages: REGLAGES_AGENT,
 
   /* Les exemples des champs vides. Ils appartiennent à la technique et
      pas à l'écran : laissés en dur, ils proposaient une app d'échecs et
@@ -158,6 +185,10 @@ const GAUNTLET = {
      elle a menti dès le 2026-08-26, où la visée est passée de 170 à
      335 mots sans que cette ligne bouge. */
   sortie: `un prompt d'un seul tenant, autour de ${Math.round((gauntlet.VISEE.lo + gauntlet.VISEE.hi) / 2)} mots`,
+  /* Seule technique à s'écarter du défaut « IDÉE » — gauntlet.js le sait
+     déjà dans son `baseConvoFor` ; c'est ICI que App.jsx doit le lire
+     pour l'analyse, au lieu de recopier « IDÉE » en dur. */
+  etiquette: "BUT",
   cleReglage: "charLimitGauntlet",
   noteLimite: `Le prompt du gantelet se mesure d'abord en MOTS — ${gauntlet.VISEE.lo} à ${gauntlet.VISEE.hi} — et le plafond en caractères n'est là que pour arrêter un débordement franc.`,
   credit: "Technique de Matt Shumer, empaquetée en skill par RoboNuggets (CC BY 4.0).",
@@ -205,6 +236,7 @@ const GAUNTLET = {
   auditApplyInstruction: gauntlet.auditApplyInstruction,
   correctionInstruction: gauntlet.correctionInstruction,
   baseConvoFor: gauntlet.baseConvoFor,
+  reglages: REGLAGES_AGENT,
 
   exempleIdee:
     "Exemple : une page de tarifs pour mon logiciel de facturation — claire, rassurante, sans jargon, aussi bonne que celle de Stripe…\n\n" +
@@ -233,6 +265,7 @@ const CROCHETS = {
   quand: "Ce qui compte le plus est ce que l'agent ne doit PAS faire : données réelles, argent, envois, prod. Prompt en cinq sections, des crochets numérotés du plus haut au plus bas, l'oracle est dans l'ORDRE.",
   unite: "car.",
   sortie: `un prompt de cinq sections, ${crochets.CROCHETS_MIN} à ${crochets.CROCHETS_MAX} crochets`,
+  etiquette: "IDÉE",
   cleReglage: "charLimitHooks",
   noteLimite:
     "Cinq sections et des crochets d'une ligne : si ça déborde, c'est le monde ou le fond qui s'est mis à raconter, jamais les crochets.",
@@ -266,6 +299,7 @@ const CROCHETS = {
   auditApplyInstruction: crochets.auditApplyInstruction,
   correctionInstruction: crochets.correctionInstruction,
   baseConvoFor: crochets.baseConvoFor,
+  reglages: REGLAGES_AGENT,
 
   exempleIdee:
     "Exemple : un agent qui tient la boîte support d'une boutique en ligne — il répond, crée les avoirs, mais un remboursement réel ou un mail à un client hors boîte de test n'existent pas dans son monde…\n\n" +
@@ -293,6 +327,7 @@ const OPUS55 = {
   quand: "Tu confies une tâche bornée, livrée en un run : une migration, un audit, une page, un document, une analyse. Prompt court d'un seul tenant, l'oracle est la LIGNE D'ARRIVÉE.",
   unite: "car.",
   sortie: `un prompt d'un seul tenant, autour de ${Math.round((opus55.VISEE.lo + opus55.VISEE.hi) / 2)} mots`,
+  etiquette: "IDÉE",
   cleReglage: "charLimitOpus55",
   noteLimite: `Le message se mesure d'abord en MOTS — ${opus55.VISEE.lo} à ${opus55.VISEE.hi} — et une tâche simple tient dans le bas de la fourchette : le plafond en caractères n'arrête qu'un débordement franc.`,
   credit: "Tirée du guide d'Anthropic « Getting the most out of Opus 5.5 » (claude.dev, 22 septembre 2026).",
@@ -325,6 +360,7 @@ const OPUS55 = {
   auditApplyInstruction: opus55.auditApplyInstruction,
   correctionInstruction: opus55.correctionInstruction,
   baseConvoFor: opus55.baseConvoFor,
+  reglages: REGLAGES_AGENT,
 
   exempleIdee:
     "Exemple : migrer tous les endpoints de paiement de mon dépôt vers le nouveau SDK Stripe — fini quand l'ancien client est supprimé et que les tests passent…\n\n" +

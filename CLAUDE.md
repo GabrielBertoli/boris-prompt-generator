@@ -110,6 +110,16 @@ Tous les parcours passent en preview, assertions au vert bundle et mail compris 
   v2). Renommer ou retirer `TECHNIQUES`, `techniqueOf`, `estTechnique`,
   `MODELE`, `contexteNeuf`, `parseJson`, `normalizeNote` ou `bandeDe` casse ce
   terminal sans qu'aucune assertion d'ici ne le voie.
+- **Le 2026-09-25, l'atelier s'aligne sur la doc OFFICIELLE d'Opus 5.5**
+  (platform.claude.com, pas le billet claude.dev) — `DECISIONS.md` § 35. Le
+  levier est dans le HARNAIS : `src/harnais.js` vaut pour les quatre
+  techniques. **La Tour Unifiée importe `CONSIGNE_ARRET_SYSTEME`,
+  `LIGNE_TEMPS_COMPTE`, `RELANCE_POINTS_OUVERTS` et `REGLAGES_AGENT`** de
+  `src/techniques.js` pour lancer ses cartes : les renommer la prive de sa
+  consigne d'arrêt sans qu'aucune assertion d'ici ne le voie. Effort de
+  rédaction `medium`, MESURÉ (7/10 contre 5/10 en high). Un correctif de
+  méthode se juge sur le banc COMPLET : trois cas réparés ont coûté quatre
+  autres (4/10), retirés.
 - **Trois instruments de vérification**, et le skill `/verify` du dépôt
   (`.claude/skills/verify/SKILL.md`) dit lequel prouve quoi :
   1. `npm run verify` — **424 assertions en local** au 2026-09-23, 408 sans

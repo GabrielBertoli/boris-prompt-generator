@@ -23,6 +23,7 @@
    ================================================================ */
 
 import { countChars } from "./meta.js";
+import { conversationDe } from "./harnais.js";
 
 export { countChars };
 
@@ -314,16 +315,8 @@ export function correctionInstruction(demand, limit) {
   );
 }
 
-export function baseConvoFor({ idea, prompt, limit }) {
-  const convo = [
-    {
-      role: "user",
-      content:
-        buildMeta(limit) +
-        "\n\nBUT :\n" +
-        (String(idea || "").trim() || "(but non conservé — pars du prompt ci-dessous)"),
-    },
-  ];
-  if (prompt) convo.push({ role: "assistant", content: prompt });
-  return convo;
+/* Le fil reconstruit : premier tour commun aux quatre techniques (idée
+   enveloppée, bloc en cache — harnais.js). */
+export function baseConvoFor({ idea, prompt, limit, id }) {
+  return conversationDe({ meta: buildMeta(limit), etiquette: "BUT", idee: idea, id, absente: "(but non conservé — pars du prompt ci-dessous)", prompt });
 }

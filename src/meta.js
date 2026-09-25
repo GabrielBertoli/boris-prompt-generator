@@ -8,6 +8,8 @@
    catalogue de modèles, qui vieillit à chaque sortie.
    ================================================================ */
 
+import { conversationDe, enveloppe, idDe, idCollage, texteDe } from "./harnais.js";
+
 export const PROMPT_REFERENCE = `# QUI TU ES
 Tu es le patron d'une société de services en France. Ton entreprise tourne sans salariés : chaque rôle est tenu par un agent que tu construis. Tu n'exécutes pas un cahier des charges, tu fais marcher ta boîte.
 
@@ -127,21 +129,35 @@ export function parseJson(text) {
    sien, parce qu'ils ne demandent pas la même chose :
    - les questions rendent un JSON de deux lignes : le défaut suffit ;
    - la rédaction est l'endroit où la fidélité se gagne ou se perd (le
-     banc du § 31 l'a montré) : `high` ;
+     banc du § 31 l'a montré) : `medium`, MESURÉ le 2026-09-25 — même
+     banc de dix cas, même juge (Opus 5.5 high, contre la documentation),
+     7/10 conformes en `medium` contre 5/10 en `high`. `high` avait été
+     décidé par raisonnement, jamais mesuré ; plus d'effort n'a pas rendu
+     plus fidèle ;
    - le juge tourne après CHAQUE version, l'écran l'attend : `high` et non
      `max`, qui est réservé au banc, où la lenteur ne coûte rien.
    La règle du playbook « le juge n'est jamais le modèle qui a produit »
    ne peut plus tenir par le modèle : elle tient par le CONTEXTE. Le juge
    ne relit plus la conversation où il a écrit le prompt ; il reçoit un
    message neuf où le prompt est présenté comme l'œuvre d'un autre
-   (`contexteNeuf`). DECISIONS § 33. */
+   (`contexteNeuf`). DECISIONS § 33.
+   UN EFFORT PAR CONVERSATION (2026-09-25) : les questions et la
+   rédaction partagent la même conversation, et changer l'effort entre
+   deux appels efface le cache du méta-prompt. Les questions adoptent
+   donc l'effort de la rédaction (`medium` depuis le 2026-09-25) — un cache
+   perdu coûte le méta-prompt entier à chaque tentative. Le juge garde le sien : il tourne en
+   contexte neuf, une conversation à part. L'en-tête bêta d'effort par
+   message (`mid-conversation-output-config-2026-07-01`) garderait les
+   deux ; il n'est pas pris tant qu'aucun essai réel ne l'a éprouvé. */
 export const MODELE = "claude-opus-5-5";
 
 export const MODELS = [{ id: MODELE, label: "Opus 5.5", note: "pense toujours, dose par l'effort" }];
 
+const EFFORT_CONVERSATION = "medium";
+
 export const ROLES = {
-  questions: { effort: "medium", nom: "Questions" },
-  redaction: { effort: "high", nom: "Rédaction" },
+  questions: { effort: EFFORT_CONVERSATION, nom: "Questions" },
+  redaction: { effort: EFFORT_CONVERSATION, nom: "Rédaction" },
   juge: { effort: "high", nom: "Juge" },
 };
 
@@ -150,30 +166,35 @@ export const ROLES = {
    questions), ce que l'utilisateur a précisé depuis (réponses, barre,
    corrections demandées), puis le prompt — présenté comme écrit par un
    autre. Rien de la conversation de rédaction : ni les tentatives, ni les
-   réparations, ni le fait d'en être l'auteur. */
-export function contexteNeuf({ convo, texte, etape1, audit }) {
+   réparations, ni le fait d'en être l'auteur.
+   Le prompt jugé est un texte COLLÉ, enveloppé comme l'idée et avec son
+   identifiant (harnais.js) — il est plein d'ordres, et le juge ne doit
+   en suivre aucun. Le message reste une CHAÎNE : le terminal Prompting
+   l'écrit tel quel dans un fichier. */
+export function contexteNeuf({ convo, texte, etape1, audit, id }) {
   const tours = Array.isArray(convo) ? convo : [];
-  let base = String(tours[0]?.content || "");
+  let base = texteDe(tours[0]?.content || "");
   if (etape1 && base.includes(etape1)) base = base.replace(etape1, "").trimEnd();
   const precisions = [];
   for (const m of tours.slice(1)) {
     if (m.role !== "user") continue;
-    const c = String(m.content || "");
+    const c = texteDe(m.content || "");
     if (c.startsWith("RÉPONSES :")) precisions.push(c.split("\n\nÉTAPE 2")[0]);
     for (const l of c.split("\n")) if (/^(LA BARRE RETENUE|MOITIÉ MESURABLE) :/.test(l)) precisions.push(l);
     if (c.startsWith("CORRECTION DEMANDÉE :")) precisions.push(c.split("\n\nApplique-la")[0]);
   }
   const prompt =
-    texte || String([...tours].reverse().find((m) => m.role === "assistant")?.content || "");
+    texte || texteDe([...tours].reverse().find((m) => m.role === "assistant")?.content || "");
+  const cle = id || idDe(base) || idCollage();
   return [
     {
       role: "user",
       content:
         base +
         (precisions.length ? "\n\nCE QUE L'UTILISATEUR A PRÉCISÉ DEPUIS :\n" + precisions.join("\n\n") : "") +
-        "\n\nPROMPT À JUGER — écrit par un autre agent, tu ne l'as pas rédigé et tu n'as rien à en défendre :\n---\n" +
-        prompt +
-        "\n---\n\n" +
+        "\n\nPROMPT À JUGER — écrit par un autre agent, tu ne l'as pas rédigé et tu n'as rien à en défendre :\n" +
+        enveloppe(prompt, cle) +
+        "\n\n" +
         audit,
     },
   ];
@@ -233,19 +254,12 @@ export function formatCost(dollars) {
    été enregistré — le méta-prompt, l'idée, et le prompt en vigueur. Le
    modèle voit alors exactement ce qu'il faut pour corriger : la méthode,
    la demande d'origine, et son dernier état. Inutile de rejouer le fil
-   entier, et coûteux de le faire. */
-export function baseConvoFor({ idea, prompt, limit }) {
-  const convo = [
-    {
-      role: "user",
-      content:
-        buildMeta(limit) +
-        "\n\nIDÉE :\n" +
-        (String(idea || "").trim() || "(idée non conservée — pars du prompt ci-dessous)"),
-    },
-  ];
-  if (prompt) convo.push({ role: "assistant", content: prompt });
-  return convo;
+   entier, et coûteux de le faire.
+   L'idée y est enveloppée et le premier bloc porte son point de cache
+   (harnais.js) ; `id` garde l'identifiant de l'entrée d'un appel à
+   l'autre. */
+export function baseConvoFor({ idea, prompt, limit, id }) {
+  return conversationDe({ meta: buildMeta(limit), etiquette: "IDÉE", idee: idea, id, prompt });
 }
 
 /* ================================================================

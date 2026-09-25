@@ -789,6 +789,90 @@ pre {
 }
 
 /* ================================================================
+   RÉGLAGES CONSEILLÉS — sous le prompt, repliés
+   Une bande discrète : le prompt reste la pièce. Les textes à coller
+   (règle d'arrêt, relance…) reprennent la feuille du prompt en plus
+   petit, et se replient au mot — rien ne déborde à 320 px.
+   ================================================================ */
+
+.reglages-agent {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.reglages-tete {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: none;
+  border: 0;
+  color: var(--chalk);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reglages-signe {
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
+
+.reglages-resume {
+  margin: -4px 16px 12px;
+  color: var(--muted-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.reglages-corps {
+  padding: 0 16px 14px;
+}
+
+.reglages-rubrique + .reglages-rubrique {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.reglages-nom {
+  margin: 0 0 4px;
+  color: var(--ember);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.reglages-texte {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.reglages-copie {
+  margin: 8px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 12px;
+  background: var(--ink-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--chalk);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ================================================================
    LA NOTE DU JUGE — un cadran, pas un compteur
 
    Ce qui était affiché en grand était la LONGUEUR. Elle reste, en puce,

@@ -8,6 +8,8 @@
    2. /api/* — l'accès, et rien d'autre.
    ================================================================ */
 
+import { messageRefus } from "./harnais.js";
+
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 const KEY_STORAGE = "atelier-boris:cle-api";
@@ -179,6 +181,9 @@ export async function callClaude(
 
   let text = "";
   let stopReason = null;
+  /* La catégorie d'un refus (`stop_details`), lue dans le même événement
+     que `stop_reason` : c'est elle qui dit POURQUOI. */
+  let stopDetails = null;
   const usage = { input_tokens: 0, output_tokens: 0 };
 
   try {
@@ -214,6 +219,8 @@ export async function callClaude(
           onDelta?.(text);
         } else if (event.type === "message_delta") {
           if (event.delta?.stop_reason) stopReason = event.delta.stop_reason;
+          const details = event.delta?.stop_details || event.stop_details;
+          if (details) stopDetails = details;
           if (event.usage?.output_tokens != null) usage.output_tokens = event.usage.output_tokens;
         } else if (event.type === "error") {
           throw new Error(event.error?.message || "Le flux a été interrompu par une erreur.");
@@ -229,12 +236,25 @@ export async function callClaude(
   }
 
   if (stopReason === "refusal") {
-    throw new Error("Le modèle a décliné cette demande. Reformule l'idée.");
+    const refus = new Error(messageRefus(stopDetails));
+    refus.categorie = stopDetails?.category || null;
+    /* Anthropic facture les jetons produits avant de refuser — ce refus
+       coûte, et l'atelier ne le comptait pas : l'erreur ne portait que le
+       message, jamais l'usage reçu dans le flux. Jointe ici, elle laisse
+       l'appelant (`ask` dans App.jsx) ajouter le coût dans son catch. */
+    refus.usage = usage;
+    throw refus;
   }
 
   if (!text.trim()) {
+    /* Vide ET coupé : ce n'est pas le texte qui a pris la place, c'est la
+       réflexion — elle se compte dans max_tokens même quand elle n'est
+       pas rendue. Baisser la limite de caractères, ce que l'écran
+       conseillait, n'y change rien. */
     if (stopReason === "max_tokens") {
-      throw new Error("Réponse coupée par la limite de jetons. Baisse la limite de caractères.");
+      throw new Error(
+        "Réponse coupée : la réflexion du modèle a consommé tout le budget de jetons avant le premier mot. Relance ; si ça se répète, l'effort est trop haut pour ce budget."
+      );
     }
     throw new Error("Réponse vide du modèle.");
   }
