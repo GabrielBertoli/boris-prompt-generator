@@ -9,6 +9,10 @@ vert, 0 échec** ; bundle servi `index-yW8qO7oj.js`, identique au build local.
 Même jour : la carte SSH « MyERP SSH Distant Claude » arrêtée (■ Stop SSH) et
 relancée par la Tour avec la consigne d'arrêt en prompt système et la relance
 armée (run `run-32787bfc4345`, cycle de reprise 12).
+Même jour, hors produit : un fichier d'instructions et une équipe par moteur
+dans les deux dossiers MyERP du serveur, efforts des chefs (Codex en max,
+Claude en high) et exception d'effort permanente dans la Tour — tout est dans
+`reprise/BRIEF.md`.
 
 Déploiement d'avant : **2026-09-23, promu à la demande explicite de Gabriel**
 (« mets-le à jour »), commit `3de2662` et suivants, poussés sur `origin/main`.
